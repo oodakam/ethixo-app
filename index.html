@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ethixo — Learn to answer with Clarity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --brand:#00A86B; --brand-dark:#00875A; --brand-deep:#046B4A;
+    --brand-light:#E3F5EC; --brand-light-b:#BFE9D4;
+    --ink:#182420; --muted:#5E6D66;
+    --amber:#C9821F; --amber-bg:#FBF0DE;
+    --bg:#EAEAEA; --card:#FFFFFF; --border:#DBDFDC; --panel:#E2E4E2;
+    --radius:18px; --shadow:0 4px 18px rgba(24,36,32,.07);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Plus Jakarta Sans',sans-serif;}
+  h1,h2,h3,.logo{font-family:'Fraunces',serif;}
+  #app{max-width:920px;margin:0 auto;padding:30px 20px 84px;min-height:100vh;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:10px;}
+  .logo{font-weight:700;font-size:27px;background:linear-gradient(115deg,var(--brand),var(--brand-deep) 75%);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:-.5px;cursor:pointer;}
+  .badge{font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:3px 11px;background:var(--card);font-weight:600;}
+  .topbtns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .vault-link{border:1.5px solid var(--brand);color:var(--brand-deep);background:#fff;border-radius:11px;padding:8px 15px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;}
+  .vault-link:hover{background:var(--brand-light);}
+  .crumb{color:var(--muted);font-size:13.5px;margin-bottom:18px;font-weight:500;}
+  .crumb b{color:var(--ink);}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px;}
+  .center{text-align:center;}
+  h1.title{font-size:27px;color:var(--ink);margin:0 0 6px;font-weight:700;}
+  p.sub{color:var(--muted);margin:0 0 26px;font-size:15px;}
+  .grid{display:grid;gap:16px;}
+  .grid.cols2{grid-template-columns:1fr 1fr;}
+  .grid.cols3{grid-template-columns:repeat(3,1fr);}
+  @media(max-width:640px){.grid.cols3{grid-template-columns:1fr;}}
+  @media(max-width:480px){.grid.cols2{grid-template-columns:1fr;}}
+  .choice{border:2px solid var(--border);border-radius:16px;padding:22px;text-align:center;cursor:pointer;background:#fff;transition:.15s;position:relative;}
+  .choice:hover{border-color:var(--brand-light-b);}
+  .choice.selected{border-color:var(--brand);background:var(--brand-light);}
+  .choice .tag{position:absolute;top:10px;right:10px;font-size:10px;background:var(--amber-bg);color:var(--amber);padding:3px 8px;border-radius:10px;font-weight:700;}
+  .choice .emoji{font-size:34px;display:block;margin-bottom:10px;}
+  .choice h3{margin:4px 0 2px;font-size:17px;color:var(--ink);}
+  .choice p{margin:0;color:var(--muted);font-size:12.5px;}
+  .btn{border:none;border-radius:12px;padding:13px 22px;font-weight:700;font-size:14.5px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:.15s;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .btn-primary{background:linear-gradient(120deg,var(--brand),var(--brand-dark));color:#fff;}
+  .btn-primary:hover:not(:disabled){filter:brightness(1.06);}
+  .btn-outline{background:#fff;border:1.5px solid var(--brand);color:var(--brand-deep);}
+  .btn-outline:hover:not(:disabled){background:var(--brand-light);}
+  .btn-ghost{background:transparent;color:var(--ink);border:1.5px solid var(--border);}
+  .row{display:flex;gap:12px;flex-wrap:wrap;}
+  .row.between{justify-content:space-between;align-items:center;}
+  .row.end{justify-content:flex-end;}
+  @media(max-width:480px){.row.between{flex-direction:column-reverse;align-items:stretch;}.row.between .btn, .row.end .btn{width:100%;}.row .btn{flex:1;}}
+  .chapter{border:1px solid var(--border);border-radius:14px;margin-bottom:12px;overflow:hidden;}
+  .chapter-head{background:var(--panel);padding:14px 18px;font-weight:700;color:var(--ink);cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:14.5px;}
+  .chapter-head.locked{cursor:not-allowed;opacity:.6;}
+  .lesson-row{padding:14px 18px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer;background:#fff;}
+  .lesson-row:hover{background:var(--brand-light);}
+  .lesson-row .lt{font-weight:600;color:var(--ink);font-size:14.5px;}
+  .lesson-row .lc{color:var(--muted);font-size:12px;}
+  .qrow{display:flex;align-items:center;gap:14px;padding:14px 6px;border-bottom:1px solid var(--border);cursor:pointer;flex-wrap:wrap;}
+  .qrow:hover{background:var(--brand-light);border-radius:10px;}
+  .qnum{width:26px;height:26px;border-radius:50%;background:var(--brand-deep);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;}
+  .qtext{flex:1;font-size:14.5px;min-width:180px;}
+  .qmeta{color:var(--muted);font-size:11.5px;margin-top:2px;}
+  .status{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;}
+  .status.done{background:var(--brand-light);color:var(--brand-deep);}
+  .status.review{background:var(--amber-bg);color:var(--amber);}
+  .status.none{background:#eee;color:#888;}
+  textarea{width:100%;border:1.5px solid var(--border);border-radius:12px;padding:14px;font-family:'Plus Jakarta Sans',sans-serif;font-size:14.5px;resize:vertical;min-height:130px;}
+  textarea:focus,input:focus,.choice:focus-visible,.btn:focus-visible{outline:3px solid var(--brand-light-b);outline-offset:1px;}
+  input[type=range]{width:100%;accent-color:var(--brand);}
+  label.field{font-weight:700;color:var(--ink);font-size:13.5px;display:block;margin:16px 0 6px;}
+  .qpanel{background:var(--brand-light);border:1px solid var(--brand-light-b);border-radius:14px;padding:16px 18px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
+  .qpanel b{color:var(--brand-deep);}
+  .loading{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px;padding:20px 0;}
+  .spinner{width:18px;height:18px;border:3px solid var(--border);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .gaugewrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-bottom:20px;}
+  .scoretext{font-size:15px;color:var(--muted);}
+  .scoretext b{font-size:22px;color:var(--ink);}
+  .fb-block{margin-top:18px;}
+  .fb-block h4{margin:0 0 8px;font-size:14px;color:var(--ink);display:flex;align-items:center;gap:6px;}
+  .fb-list{list-style:none;margin:0;padding:0;}
+  .fb-list li{display:flex;gap:8px;padding:6px 0;font-size:14px;line-height:1.4;}
+  .fb-list.ok li::before{content:"✓";color:var(--brand-deep);font-weight:800;flex:none;}
+  .fb-list.next li::before{content:"↗";color:var(--amber);font-weight:800;flex:none;}
+  .history{border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:16px;background:#fbfcfb;}
+  .hattempt{display:flex;justify-content:space-between;padding:8px 0;border-top:1px dashed var(--border);font-size:13.5px;}
+  .hattempt:first-child{border-top:none;}
+  .errbox{background:#fdeceb;border:1px solid #f3c1bd;color:#a33;padding:12px 16px;border-radius:10px;font-size:13.5px;margin:14px 0;}
+  .note{font-size:12px;color:var(--muted);margin-top:22px;text-align:center;}
+  .heroart{width:100px;margin:0 auto 18px;display:block;}
+  .disabledline{font-size:12px;color:#94A29B;text-align:center;margin-top:6px;}
+  .vaultrow{border-bottom:1px solid var(--border);padding:14px 4px;}
+  .vaultrow .vq{font-weight:600;font-size:14px;}
+  .vaultmeta{color:var(--muted);font-size:12px;margin-top:3px;}
+  .checklabel{display:flex;align-items:flex-start;gap:8px;}
+  .pricecard{border:2px solid var(--border);border-radius:var(--radius);padding:26px;text-align:center;background:#fff;}
+  .pricecard.hi{border-color:var(--brand);background:var(--brand-light);}
+  .pricecard .amt{font-size:30px;font-weight:800;color:var(--ink);margin:10px 0;font-family:'Fraunces',serif;}
+  .pricecard ul{list-style:none;padding:0;margin:14px 0;text-align:left;font-size:13.5px;color:var(--ink);}
+  .pricecard ul li{padding:5px 0;}
+  .pricecard ul li::before{content:"✓ ";color:var(--brand-deep);font-weight:800;}
+  @media (max-width:480px){
+    #app{padding:16px 12px 60px;}
+    .card{padding:18px;}
+    h1.title{font-size:22px;}
+  }
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ---------- Data (original placeholder content — dummy, not sourced from any real exam) ---------- */
+const SUBJECT_META = {
+  EN:{ name:"English", emoji:"📖" },
+  SCI:{ name:"Science", emoji:"🔬" },
+  SS:{ name:"Social Science", emoji:"🌏" },
+};
+const LEVEL_LABEL = { P5:"Primary 5", P6:"Primary 6" };
+
+function mkChapter(id, title, lessons, locked){ return { id, title, locked: !!locked, lessons: lessons||[] }; }
+function mkLesson(id, title, questions){ return { id, title, questions }; }
+
+const LEVELS = {
+  P5: {
+    EN: { chapters:[
+      mkChapter("ch1","Chapter 1: Building Strong Compositions", [
+        mkLesson("1.1","1.1 Planning Your Story", [
+          {t:"Name two things you should plan before starting a composition.", m:2},
+          {t:"Explain why a strong opening sentence matters.", m:3},
+        ]),
+        mkLesson("1.2","1.2 Descriptive Language", [
+          {t:"Give an example of a describing word (adjective) and explain what it adds to a sentence.", m:2},
+          {t:"Explain the difference between 'said' and a more expressive verb such as 'whispered'.", m:3},
+        ]),
+      ]),
+      mkChapter("ch2","Chapter 2: Grammar in Use", [], true),
+    ]},
+    SCI: { chapters:[
+      mkChapter("ch1","Chapter 1: Plants and Their Needs", [
+        mkLesson("1.1","1.1 What Plants Need to Grow", [
+          {t:"Name three things a plant needs to grow well.", m:3},
+          {t:"Explain what happens to a plant that does not get enough sunlight.", m:3},
+        ]),
+        mkLesson("1.2","1.2 Parts of a Plant", [
+          {t:"Name one function of a plant's roots.", m:2},
+          {t:"Explain why leaves are important to a plant.", m:3},
+        ]),
+      ]),
+      mkChapter("ch2","Chapter 2: Materials Around Us", [], true),
+    ]},
+    SS: { chapters:[
+      mkChapter("ch1","Chapter 1: My Community and Singapore", [
+        mkLesson("1.1","1.1 Understanding My Community", [
+          {t:"Name two features that make up a community.", m:2},
+          {t:"Explain one way people in a community depend on each other.", m:3},
+        ]),
+        mkLesson("1.2","1.2 Singapore, My Home", [
+          {t:"Name one national symbol of Singapore.", m:1},
+          {t:"Explain why national symbols are important to a country.", m:3},
+        ]),
+      ]),
+      mkChapter("ch2","Chapter 2: Singapore's Early History", [], true),
+    ]},
+  },
+  P6: {
+    EN: { chapters:[
+      mkChapter("ch1","Chapter 1: Comprehension & Composition Skills", [
+        mkLesson("1.1","1.1 Understanding the Passage", [
+          {t:"What is the main idea of a paragraph, and how can you identify it quickly?", m:3},
+          {t:"Explain the difference between a fact and an opinion in a passage.", m:2},
+        ]),
+        mkLesson("1.2","1.2 Writing with Purpose", [
+          {t:"Describe one way a writer creates suspense in a story opening.", m:5},
+          {t:"Explain why choosing strong verbs improves a composition.", m:3},
+        ]),
+      ]),
+      mkChapter("ch2","Chapter 2: Situational Writing", [], true),
+    ]},
+    SCI: { chapters:[
+      mkChapter("ch1","Chapter 1: Living Things and Their Environment", [
+        mkLesson("1.1","1.1 Life Cycles", [
+          {t:"Explain one difference between complete and incomplete metamorphosis.", m:5},
+          {t:"Name two conditions needed for a seed to germinate.", m:2},
+        ]),
+        mkLesson("1.2","1.2 Interactions Within the Environment", [
+          {t:"Describe one way a change in habitat can affect an animal's survival.", m:5},
+          {t:"What is meant by a 'food chain'?", m:2},
+        ]),
+      ]),
+      mkChapter("ch2","Chapter 2: Cycles in Matter and Water", [], true),
+    ]},
+    SS: { chapters:[
+      mkChapter("ch1","Chapter 1: Discovering Southeast Asia", [
+        mkLesson("1.1","1.1 Location of Southeast Asian Countries", [
+          {t:"Name three countries located in Southeast Asia.", m:3},
+          {t:"Which large body of water lies between Singapore and its nearest island neighbours?", m:1},
+          {t:"Explain how Singapore's location has helped it grow as a port city.", m:5},
+        ]),
+        mkLesson("1.2","1.2 Diversity in Southeast Asia", [
+          {t:"Give two examples of ethnic diversity found within Southeast Asia.", m:2},
+          {t:"Name one major religion practised in Southeast Asia.", m:1},
+          {t:"Explain why Southeast Asia is often described as a culturally diverse region.", m:5},
+        ]),
+        mkLesson("1.3","1.3 Connections between Singapore and Southeast Asia", [
+          {t:"Name one regional organisation that connects Singapore with its Southeast Asian neighbours.", m:1},
+          {t:"Describe one way Singapore is economically connected to Southeast Asia.", m:5},
+          {t:"Explain how transport links have strengthened ties between Singapore and the rest of Southeast Asia.", m:10},
+        ]),
+      ]),
+      mkChapter("ch2","Chapter 2: Understanding Features and Legacies of Civilisations", [], true),
+      mkChapter("ch3","Chapter 3: Connecting with the Global Community", [], true),
+    ]},
+  },
+};
+
+/* ---------- State ---------- */
+let state = { view:"entry", level:null, subjectKey:null, lessonId:null, currentQuestion:null,
+  answerDraft:"", feedback:null, loading:false, error:null, toast:null, vault:[], selectedVaultIds:[] };
+
+/* ---------- Storage helpers (browser localStorage — per-device, no account system yet) ---------- */
+function sGet(key){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
+function sSet(key,val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){ console.error("storage set failed",e); } }
+
+function qKey(q){ return "attempts:"+q.level+":"+q.subjectKey+":"+q.lessonId+":"+q.id; }
+
+async function loadVault(){ state.vault = (await sGet("vault")) || []; }
+
+/* ---------- AI call — goes through OUR OWN secure backend at /api/feedback, not directly to Anthropic ---------- */
+async function getAIFeedback(question, marks, answer){
+  const res = await fetch("/api/feedback", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ question, marks, answer })
+  });
+  const data = await res.json();
+  if(!res.ok){ throw new Error(data.error || ("Server error "+res.status)); }
+  return data;
+}
+
+/* ---------- Navigation ---------- */
+function goto(view, extra){ state.view=view; Object.assign(state, extra||{}); state.error=null; render(); }
+function toast(msg){ state.toast=msg; render(); setTimeout(()=>{ state.toast=null; render(); }, 2400); }
+
+/* ---------- Render ---------- */
+async function render(){
+  const app = document.getElementById("app");
+  app.innerHTML = topbar() + (state.toast? '<div class="badge" style="position:fixed;top:16px;right:16px;background:var(--brand-deep);color:#fff;border-color:var(--brand-deep);padding:8px 16px;z-index:99;">'+state.toast+'</div>':"") + '<div id="viewhost"></div>';
+  const host = document.getElementById("viewhost");
+  host.innerHTML = '<div class="loading"><div class="spinner"></div>Loading…</div>';
+
+  let html = "";
+  if(state.view==="entry") html = viewEntry();
+  else if(state.view==="level") html = viewLevel();
+  else if(state.view==="subject") html = viewSubject();
+  else if(state.view==="lessons") html = viewLessons();
+  else if(state.view==="qbank") html = await viewQBank();
+  else if(state.view==="customQ") html = viewCustomQ();
+  else if(state.view==="answer") html = viewAnswer();
+  else if(state.view==="feedback") html = viewFeedback();
+  else if(state.view==="improve") html = await viewImprove();
+  else if(state.view==="vault") html = viewVault();
+  else if(state.view==="printview") html = viewPrint();
+  else if(state.view==="plans") html = viewPlans();
+
+  host.innerHTML = html;
+  attachHandlers();
+  drawGaugeIfPresent();
+}
+
+function topbar(){
+  return '<div class="topbar">'+
+    '<div class="logo" onclick="goto(\'entry\')">Ethixo</div>'+
+    '<div class="topbtns">'+
+      '<span class="badge">MVP · test build</span>'+
+      '<button class="vault-link" onclick="goto(\'plans\')">Plans</button>'+
+      '<button class="vault-link" onclick="goto(\'vault\')">ScholarVault</button>'+
+    '</div></div>';
+}
+
+/* ---- Entry ---- */
+function viewEntry(){
+  return '<div class="card center">'+
+    '<svg class="heroart" viewBox="0 0 120 120" fill="none">'+
+    '<circle cx="60" cy="60" r="52" stroke="url(#g1)" stroke-width="6"/>'+
+    '<path d="M40 62 L54 76 L82 44" stroke="url(#g1)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'+
+    '<defs><linearGradient id="g1" x1="0" y1="0" x2="120" y2="120"><stop offset="0" stop-color="#00A86B"/><stop offset="1" stop-color="#046B4A"/></linearGradient></defs>'+
+    '</svg>'+
+    '<h1 class="title">Learn to answer with Clarity</h1>'+
+    '<p class="sub">Ethixo doesn\'t hand you the answer — it coaches you toward it.</p>'+
+    '<button class="btn btn-primary" onclick="goto(\'level\')">Continue as Demo Student →</button>'+
+    '<div class="disabledline">Google / Apple / School ID sign-in — wired up in a later phase</div>'+
+  '</div>';
+}
+
+/* ---- Level ---- */
+function viewLevel(){
+  return '<div class="card">'+
+    '<h1 class="title center">Select your level</h1>'+
+    '<p class="sub center">This helps personalise your practice</p>'+
+    '<div class="grid cols2">'+
+      '<div class="choice '+(state.level==='P5'?'selected':'')+'" onclick="state.level=\'P5\';render()"><span class="emoji">5️⃣</span><h3>Primary 5</h3><p>Upper Primary</p></div>'+
+      '<div class="choice '+(state.level==='P6'?'selected':'')+'" onclick="state.level=\'P6\';render()"><span class="emoji">6️⃣</span><h3>Primary 6</h3><p>Upper Primary (PSLE Year)</p></div>'+
+    '</div>'+
+    '<div class="row end" style="margin-top:22px;">'+
+      '<button class="btn btn-primary" '+(!state.level?'disabled':'')+' onclick="goto(\'subject\')">Continue</button>'+
+    '</div>'+
+  '</div>';
+}
+
+/* ---- Subject ---- */
+function viewSubject(){
+  const card = (key)=>{ const meta=SUBJECT_META[key];
+    return '<div class="choice" onclick="goto(\'lessons\',{subjectKey:\''+key+'\'})">'+
+    '<span class="emoji">'+meta.emoji+'</span><h3>'+meta.name+'</h3>'+
+    '<p>Practice questions ready</p></div>'; };
+  return '<div class="crumb"><b>'+LEVEL_LABEL[state.level]+'</b></div>'+
+  '<div class="card">'+
+    '<h1 class="title center">Choose a subject</h1>'+
+    '<p class="sub center">All content below is placeholder / dummy data for this MVP</p>'+
+    '<div class="grid cols3">'+card('EN')+card('SCI')+card('SS')+'</div>'+
+  '</div>';
+}
+
+/* ---- Lessons ---- */
+function viewLessons(){
+  const subj = LEVELS[state.level][state.subjectKey];
+  const chapters = subj.chapters.map(ch=>{
+    if(ch.locked){
+      return '<div class="chapter"><div class="chapter-head locked">🔒 '+ch.title+'<span>Coming soon</span></div></div>';
+    }
+    const lessons = ch.lessons.map(l=>'<div class="lesson-row" onclick="goto(\'qbank\',{lessonId:\''+l.id+'\'})">'+
+      '<div><div class="lt">'+l.title+'</div><div class="lc">'+l.questions.length+' practice questions</div></div><span>›</span></div>').join("");
+    return '<div class="chapter"><div class="chapter-head">'+ch.title+'<span>▾</span></div>'+lessons+'</div>';
+  }).join("");
+  return '<div class="crumb"><b>'+LEVEL_LABEL[state.level]+'</b> › <b>'+SUBJECT_META[state.subjectKey].name+'</b></div>'+
+  '<div class="card"><h1 class="title center">Choose a lesson to practise</h1><div style="margin-top:18px;">'+chapters+'</div></div>';
+}
+
+/* ---- Question bank ---- */
+function findLesson(){
+  const subj = LEVELS[state.level][state.subjectKey];
+  for(const ch of subj.chapters){ for(const l of ch.lessons){ if(l.id===state.lessonId) return l; } }
+  return null;
+}
+async function viewQBank(){
+  const lesson = findLesson();
+  const rows = await Promise.all(lesson.questions.map(async (q,idx)=>{
+    const qObj = { id:String(idx), level:state.level, subjectKey:state.subjectKey, lessonId:lesson.id, t:q.t, m:q.m };
+    const attempts = (await sGet(qKey(qObj))) || [];
+    let status = "none", label="Not Attempted";
+    if(attempts.length){
+      const last = attempts[attempts.length-1];
+      const frac = (last.scoreLow / q.m);
+      if(frac >= 0.5){ status="done"; label="Completed · "+attempts.length+" attempt"+(attempts.length>1?"s":""); }
+      else { status="review"; label="Needs Review · "+attempts.length+" attempt"+(attempts.length>1?"s":""); }
+    }
+    return '<div class="qrow" onclick="selectBankQuestion('+idx+')">'+
+      '<div class="qnum">'+(idx+1)+'</div>'+
+      '<div class="qtext">'+q.t+'<div class="qmeta">'+q.m+' Mark'+(q.m>1?"s":"")+'</div></div>'+
+      '<div class="status '+status+'">'+label+'</div>'+
+    '</div>';
+  }));
+  window.__lessonForBank = lesson;
+  return '<div class="crumb"><b>'+LEVEL_LABEL[state.level]+'</b> › <b>'+SUBJECT_META[state.subjectKey].name+'</b> › <b>'+lesson.title+'</b></div>'+
+  '<div class="qpanel"><div>✏️ <b>Practice a question of your choice</b><div class="qmeta" style="margin-top:2px;">Type or paste your own question to begin</div></div>'+
+  '<button class="btn btn-outline" onclick="goto(\'customQ\')">Start Writing</button></div>'+
+  '<div class="card"><h2 style="margin-top:0;color:var(--ink);">'+lesson.title+'</h2><div class="qmeta" style="margin-bottom:10px;">'+lesson.questions.length+' practice questions</div>'+rows.join("")+'</div>';
+}
+function selectBankQuestion(idx){
+  const lesson = window.__lessonForBank;
+  const q = lesson.questions[idx];
+  state.currentQuestion = { id:String(idx), level:state.level, subjectKey:state.subjectKey, lessonId:lesson.id, lessonTitle:lesson.title, t:q.t, m:q.m };
+  state.answerDraft = "";
+  goto("answer");
+}
+
+/* ---- Custom question ---- */
+function viewCustomQ(){
+  const lesson = findLesson();
+  return '<div class="card">'+
+    '<h1 class="title center">Practice a question of your choice</h1>'+
+    '<p class="sub center">'+lesson.title+' — keep it related to this lesson</p>'+
+    '<label class="field">Type your question</label>'+
+    '<textarea id="customText" placeholder="Type your question here…"></textarea>'+
+    '<label class="field">Adjust Marks: <span id="marksVal">12</span></label>'+
+    '<input type="range" min="1" max="25" value="12" id="marksSlider" oninput="document.getElementById(\'marksVal\').innerText=this.value">'+
+    '<div class="row between" style="margin-top:20px;">'+
+      '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
+      '<button class="btn btn-primary" onclick="startCustom()">Start Writing</button>'+
+    '</div>'+
+  '</div>';
+}
+function startCustom(){
+  const t = document.getElementById("customText").value.trim();
+  if(!t){ toast("Please type a question first"); return; }
+  const m = parseInt(document.getElementById("marksSlider").value,10);
+  const lesson = findLesson();
+  state.currentQuestion = { id:"custom-"+Date.now(), level:state.level, subjectKey:state.subjectKey, lessonId:lesson.id, lessonTitle:lesson.title, t, m, custom:true };
+  state.answerDraft = "";
+  goto("answer");
+}
+
+/* ---- Answer ---- */
+function viewAnswer(){
+  const q = state.currentQuestion;
+  return '<div class="crumb"><b>'+LEVEL_LABEL[q.level]+'</b> › <b>'+SUBJECT_META[q.subjectKey].name+'</b> › <b>'+q.lessonTitle+'</b></div>'+
+  '<div class="card">'+
+    '<h1 class="title">Write your Best Answer</h1>'+
+    '<p class="qmeta" style="font-size:13px;">'+q.m+' Mark'+(q.m>1?"s":"")+'</p>'+
+    '<p style="font-weight:700;color:var(--ink);font-size:16px;">'+q.t+'</p>'+
+    '<textarea id="answerBox" placeholder="Type your answer here…">'+state.answerDraft+'</textarea>'+
+    (state.error? '<div class="errbox">'+state.error+' <a href="#" onclick="event.preventDefault();submitAnswer()">Try again</a></div>':"")+
+    '<div class="row between" style="margin-top:18px;">'+
+      '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
+      '<button class="btn btn-primary" id="reviewBtn" onclick="submitAnswer()">'+(state.loading? "Reviewing…":"Review My Answer")+'</button>'+
+    '</div>'+
+    (state.loading? '<div class="loading"><div class="spinner"></div>Ethixo is reading your answer…</div>':"")+
+  '</div>';
+}
+async function submitAnswer(){
+  const box = document.getElementById("answerBox");
+  const ans = box.value.trim();
+  if(!ans){ toast("Write an answer first"); return; }
+  state.answerDraft = ans; state.loading = true; state.error=null; render();
+  try{
+    const q = state.currentQuestion;
+    const fb = await getAIFeedback(q.t, q.m, ans);
+    state.feedback = fb; state.loading=false;
+    const attempts = (await sGet(qKey(q))) || [];
+    attempts.push({ answer:ans, scoreLow:fb.scoreLow, scoreHigh:fb.scoreHigh, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
+    await sSet(qKey(q), attempts);
+    goto("feedback");
+  }catch(e){
+    state.loading=false; state.error="Couldn't reach Ethixo's AI coach right now. ("+e.message+")"; render();
+  }
+}
+
+/* ---- Feedback ---- */
+function viewFeedback(){
+  const q = state.currentQuestion, fb = state.feedback;
+  return '<div class="crumb"><b>'+LEVEL_LABEL[q.level]+'</b> › <b>'+SUBJECT_META[q.subjectKey].name+'</b> › <b>'+q.lessonTitle+'</b></div>'+
+  '<div class="card">'+
+    '<h1 class="title">Your Performance Feedback</h1>'+
+    '<p style="font-weight:700;color:var(--ink);">'+q.t+'</p>'+
+    '<div class="gaugewrap">'+
+      '<svg width="120" height="70" viewBox="0 0 120 70" id="gaugeSvg">'+
+        '<path d="M10,65 A50,50 0 0 1 110,65" fill="none" stroke="#e2e5e2" stroke-width="10" stroke-linecap="round"/>'+
+        '<path id="gaugeArc" d="M10,65 A50,50 0 0 1 110,65" fill="none" stroke="url(#gg)" stroke-width="10" stroke-linecap="round"/>'+
+        '<defs><linearGradient id="gg" x1="0" y1="0" x2="120" y2="0"><stop offset="0" stop-color="#00A86B"/><stop offset="1" stop-color="#046B4A"/></linearGradient></defs>'+
+      '</svg>'+
+      '<div class="scoretext">Estimated Score<br><b>'+fb.scoreLow+'–'+fb.scoreHigh+' / '+q.m+'</b> Marks</div>'+
+    '</div>'+
+    '<div class="fb-block"><h4>✅ Strengths</h4><ul class="fb-list ok">'+fb.strengths.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>'+
+    '<div class="fb-block"><h4>↗ Next Steps to Strengthen Your Answer</h4><ul class="fb-list next">'+fb.nextSteps.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>'+
+    '<div class="row between" style="margin-top:24px;">'+
+      '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
+      '<div class="row">'+
+        '<button class="btn btn-outline" onclick="addToVault()">⭐ Add to ScholarVault</button>'+
+        '<button class="btn btn-primary" onclick="goto(\'improve\')">Retry Question</button>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+}
+function drawGaugeIfPresent(){
+  const arc = document.getElementById("gaugeArc");
+  if(!arc || !state.feedback) return;
+  const q = state.currentQuestion, fb = state.feedback;
+  const frac = Math.max(0, Math.min(1, ((fb.scoreLow+fb.scoreHigh)/2) / q.m));
+  const len = 3.14159*50;
+  arc.setAttribute("stroke-dasharray", (len*frac)+","+len);
+}
+async function addToVault(){
+  const q = state.currentQuestion, fb = state.feedback;
+  await loadVault();
+  const item = { qid:qKey(q), level:q.level, subjectKey:q.subjectKey, lessonTitle:q.lessonTitle, t:q.t, m:q.m, answer:state.answerDraft, scoreLow:fb.scoreLow, scoreHigh:fb.scoreHigh, savedAt:Date.now() };
+  state.vault = state.vault.filter(v=>v.qid!==item.qid);
+  state.vault.push(item);
+  await sSet("vault", state.vault);
+  toast("Saved to ScholarVault ⭐");
+}
+
+/* ---- Improve ---- */
+async function viewImprove(){
+  const q = state.currentQuestion;
+  const attempts = (await sGet(qKey(q))) || [];
+  const best = attempts.reduce((a,b)=> (b.scoreLow>(a?a.scoreLow:-1)? b:a), null);
+  const hist = attempts.map((a,i)=>'<div class="hattempt"><span>Attempt '+(i+1)+(i===attempts.length-1?" (Latest)":"")+'</span><span>'+a.scoreLow+'-'+a.scoreHigh+'/'+q.m+'</span></div>').join("");
+  return '<div class="crumb"><b>'+LEVEL_LABEL[q.level]+'</b> › <b>'+SUBJECT_META[q.subjectKey].name+'</b> › <b>'+q.lessonTitle+'</b></div>'+
+  '<div class="card">'+
+    '<h1 class="title">Improve Your Answer</h1>'+
+    '<p class="qmeta">Attempts: '+attempts.length+' '+(best? "| Best: "+best.scoreLow+"-"+best.scoreHigh+"/"+q.m:"")+'</p>'+
+    '<p style="font-weight:700;color:var(--ink);">'+q.t+'</p>'+
+    '<div class="history">'+(hist || '<span class="qmeta">No attempts yet</span>')+'</div>'+
+    '<label class="field">Your improved answer</label>'+
+    '<textarea id="improveBox" placeholder="Type your answer here…"></textarea>'+
+    (state.error? '<div class="errbox">'+state.error+'</div>':"")+
+    '<div class="row between" style="margin-top:18px;">'+
+      '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
+      '<button class="btn btn-primary" onclick="submitImprove()">'+(state.loading?"Reviewing…":"Submit My New Answer")+'</button>'+
+    '</div>'+
+    (state.loading? '<div class="loading"><div class="spinner"></div>Ethixo is reading your answer…</div>':"")+
+  '</div>';
+}
+async function submitImprove(){
+  const box = document.getElementById("improveBox");
+  const ans = box.value.trim();
+  if(!ans){ toast("Write an answer first"); return; }
+  state.loading=true; state.error=null; render();
+  try{
+    const q = state.currentQuestion;
+    const fb = await getAIFeedback(q.t, q.m, ans);
+    state.feedback = fb; state.answerDraft = ans; state.loading=false;
+    const attempts = (await sGet(qKey(q))) || [];
+    attempts.push({ answer:ans, scoreLow:fb.scoreLow, scoreHigh:fb.scoreHigh, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
+    await sSet(qKey(q), attempts);
+    goto("feedback");
+  }catch(e){
+    state.loading=false; state.error="Couldn't reach Ethixo's AI coach right now. ("+e.message+")"; render();
+  }
+}
+
+/* ---- ScholarVault ---- */
+function viewVault(){
+  const rows = state.vault.slice().reverse().map((v)=>'<div class="vaultrow">'+
+      '<label class="checklabel">'+
+        '<input type="checkbox" data-qid="'+v.qid+'" onchange="toggleVaultSel(\''+v.qid+'\',this.checked)">'+
+        '<div><div class="vq">'+v.t+'</div>'+
+        '<div class="vaultmeta">'+LEVEL_LABEL[v.level]+' · '+SUBJECT_META[v.subjectKey].name+' · '+v.lessonTitle+' · '+v.m+' Marks · Score '+v.scoreLow+'-'+v.scoreHigh+' · Saved '+new Date(v.savedAt).toLocaleDateString()+'</div></div>'+
+      '</label>'+
+    '</div>').join("");
+  return '<div class="card">'+
+    '<h1 class="title center">ScholarVault</h1>'+
+    '<p class="sub center">Your Best Answers. Preserved.</p>'+
+    (state.vault.length? rows : '<p class="qmeta center">No saved answers yet — add one from the Feedback screen.</p>')+
+    '<div class="row between" style="margin-top:22px;">'+
+      '<button class="btn btn-ghost" onclick="goto(\'entry\')">Back</button>'+
+      '<button class="btn btn-primary" onclick="goto(\'printview\')" '+(!state.vault.length?"disabled":"")+'>Generate Revision Notes</button>'+
+    '</div>'+
+  '</div>';
+}
+function toggleVaultSel(qid, checked){
+  if(checked) state.selectedVaultIds.push(qid);
+  else state.selectedVaultIds = state.selectedVaultIds.filter(x=>x!==qid);
+}
+function viewPrint(){
+  const items = state.selectedVaultIds.length? state.vault.filter(v=>state.selectedVaultIds.includes(v.qid)) : state.vault;
+  const rows = items.map(v=>'<div style="margin-bottom:22px;padding-bottom:16px;border-bottom:1px solid #ddd;">'+
+    '<div style="font-weight:700;color:var(--ink);">'+v.t+' <span style="font-weight:400;color:#888;font-size:12px;">('+v.m+' Marks)</span></div>'+
+    '<div style="margin:8px 0;white-space:pre-wrap;">'+v.answer+'</div>'+
+    '<div style="font-size:12px;color:#888;">Estimated score: '+v.scoreLow+'-'+v.scoreHigh+'/'+v.m+'</div>'+
+  '</div>').join("");
+  return '<div class="card">'+
+    '<div class="noprint row between" style="margin-bottom:16px;">'+
+      '<button class="btn btn-ghost" onclick="goto(\'vault\')">Back</button>'+
+      '<button class="btn btn-primary" onclick="downloadPDF()">⬇ Download PDF</button>'+
+    '</div>'+
+    '<h1 class="title">Ethixo Revision Notes</h1>'+
+    '<p class="sub">Generated '+new Date().toLocaleDateString()+'</p>'+
+    (rows || '<p class="qmeta">No answers selected.</p>')+
+  '</div>';
+}
+function downloadPDF(){
+  const items = state.selectedVaultIds.length? state.vault.filter(v=>state.selectedVaultIds.includes(v.qid)) : state.vault;
+  if(!items.length){ toast("No answers to export"); return; }
+  if(!window.jspdf){ toast("PDF library failed to load"); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:"pt", format:"a4" });
+  const marginX = 48, pageW = doc.internal.pageSize.getWidth()-96, pageH = doc.internal.pageSize.getHeight();
+  let y = 60;
+  doc.setFont("helvetica","bold"); doc.setFontSize(20); doc.setTextColor(0,168,107);
+  doc.text("Ethixo Revision Notes", marginX, y); y+=16;
+  doc.setDrawColor(0,168,107); doc.setLineWidth(2); doc.line(marginX,y,marginX+120,y); y+=22;
+  doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(110,110,110);
+  doc.text("Generated "+new Date().toLocaleDateString(), marginX, y); y+=28;
+
+  items.forEach((v,i)=>{
+    if(y > pageH-120){ doc.addPage(); y=60; }
+    doc.setFont("helvetica","bold"); doc.setFontSize(12); doc.setTextColor(24,36,32);
+    const qLines = doc.splitTextToSize((i+1)+". "+v.t+"  ("+v.m+" Marks)", pageW);
+    doc.text(qLines, marginX, y); y += qLines.length*15 + 4;
+
+    doc.setFont("helvetica","normal"); doc.setFontSize(11); doc.setTextColor(60,70,66);
+    const aLines = doc.splitTextToSize(v.answer, pageW);
+    if(y + aLines.length*13 > pageH-70){ doc.addPage(); y=60; }
+    doc.text(aLines, marginX, y); y += aLines.length*13 + 8;
+
+    doc.setFontSize(9); doc.setTextColor(140,140,140);
+    doc.text("Estimated score: "+v.scoreLow+"-"+v.scoreHigh+"/"+v.m, marginX, y); y += 26;
+  });
+  doc.save("Ethixo-Revision-Notes.pdf");
+  toast("PDF downloaded ⬇");
+}
+
+/* ---- Plans (placeholder — no real billing wired up) ---- */
+function viewPlans(){
+  return '<div class="card">'+
+    '<h1 class="title center">Plans</h1>'+
+    '<p class="sub center">Placeholder pricing — payment is not connected in this MVP</p>'+
+    '<div class="grid cols2">'+
+      '<div class="pricecard"><h3>Free Trial</h3><div class="amt">S$0</div><p class="qmeta">7 days</p>'+
+        '<ul><li>All subjects</li><li>AI feedback</li><li>ScholarVault</li></ul>'+
+        '<button class="btn btn-outline" onclick="toast(\'This is a design placeholder — no account system yet\')">Start Trial</button></div>'+
+      '<div class="pricecard hi"><h3>Ethixo Plus</h3><div class="amt">S$12<span style="font-size:14px;color:var(--muted);">/month</span></div><p class="qmeta">Billed monthly</p>'+
+        '<ul><li>Unlimited AI feedback</li><li>Full ScholarVault</li><li>Revision notes export</li></ul>'+
+        '<button class="btn btn-primary" onclick="toast(\'Billing integration comes in a later phase — this is a design placeholder\')">Subscribe</button></div>'+
+    '</div>'+
+    '<div class="row end" style="margin-top:20px;"><button class="btn btn-ghost" onclick="goto(\'entry\')">Back</button></div>'+
+  '</div>';
+}
+
+/* ---- misc ---- */
+function attachHandlers(){}
+window.goto = goto; window.selectBankQuestion = selectBankQuestion; window.startCustom = startCustom;
+window.submitAnswer = submitAnswer; window.addToVault = addToVault; window.submitImprove = submitImprove;
+window.toggleVaultSel = toggleVaultSel; window.downloadPDF = downloadPDF; window.state = state;
+
+(async function init(){ await loadVault(); render(); })();
+</script>
+</body>
+</html>
