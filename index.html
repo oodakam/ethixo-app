@@ -19,7 +19,7 @@
   }
   *{box-sizing:border-box;}
   html,body{height:100%;}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Montserrat',sans-serif;display:flex;flex-direction:column;min-height:100vh;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Montserrat',sans-serif;display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;}
   h1,h2,h3,.logo{font-family:'Montserrat',sans-serif;}
   #app{max-width:920px;margin:0 auto;padding:30px 20px 24px;width:100%;flex:1 0 auto;}
   .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:10px;}
@@ -95,6 +95,7 @@
   .hattempt{display:flex;justify-content:space-between;padding:8px 0;border-top:1px dashed var(--border);font-size:13.5px;}
   .hattempt:first-child{border-top:none;}
   .errbox{background:#fdeceb;border:1px solid #f3c1bd;color:#a33;padding:12px 16px;border-radius:10px;font-size:13.5px;margin:14px 0;}
+  .hintbox{background:var(--amber-bg);border:1px solid #efd6a4;color:#8a5c14;padding:12px 16px;border-radius:10px;font-size:13.5px;margin:14px 0;}
   .note{font-size:12px;color:var(--muted);margin-top:22px;text-align:center;}
   .heroart{width:100px;margin:0 auto 18px;display:block;}
   .disabledline{font-size:12px;color:#94A29B;text-align:center;margin-top:6px;}
@@ -105,12 +106,17 @@
   .pricecard{border:2px solid var(--border);border-radius:var(--radius);padding:26px;text-align:center;background:#fff;}
   .pricecard.hi{border-color:var(--brand);background:var(--brand-light);}
   .pricecard .amt{font-size:30px;font-weight:800;color:var(--ink);margin:10px 0;font-family:'Montserrat',sans-serif;}
-  .site-footer{max-width:920px;margin:0 auto;padding:0 20px 30px;text-align:center;flex-shrink:0;width:100%;box-sizing:border-box;}
-  .site-footer .f1{font-size:12px;font-weight:500;color:var(--muted);margin:0;}
-  .site-footer .f2{font-size:9.5px;color:#7c847e;margin:4px 0 0;}
   .pricecard ul{list-style:none;padding:0;margin:14px 0;text-align:left;font-size:13.5px;color:var(--ink);}
   .pricecard ul li{padding:5px 0;}
   .pricecard ul li::before{content:"✓ ";color:var(--brand-deep);font-weight:800;}
+  .site-footer{max-width:920px;margin:0 auto;padding:0 20px 30px;text-align:center;flex-shrink:0;width:100%;box-sizing:border-box;}
+  .site-footer .f1{font-size:12px;font-weight:500;color:var(--muted);margin:0;}
+  .site-footer .f2{font-size:9.5px;color:#7c847e;margin:4px 0 0;}
+  @media print{
+    .noprint{display:none!important;}
+    body{background:#fff;}
+    .card{box-shadow:none;border:none;}
+  }
   @media (max-width:480px){
     #app{padding:16px 12px 60px;}
     .card{padding:18px;}
@@ -232,17 +238,17 @@ const LEVELS = {
 
 /* ---------- State ---------- */
 let state = { view:"entry", level:null, subjectKey:null, lessonId:null, currentQuestion:null,
-  answerDraft:"", feedback:null, loading:false, error:null, toast:null, vault:[], selectedVaultIds:[] };
+  answerDraft:"", feedback:null, loading:false, validating:false, error:null, toast:null, vault:[], selectedVaultIds:[] };
 
 /* ---------- Storage helpers (browser localStorage — per-device, no account system yet) ---------- */
 function sGet(key){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
 function sSet(key,val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){ console.error("storage set failed",e); } }
-
 function qKey(q){ return "attempts:"+q.level+":"+q.subjectKey+":"+q.lessonId+":"+q.id; }
+function attemptScore(a){ return typeof a.score === "number" ? a.score : Math.round(((a.scoreLow||0)+(a.scoreHigh||0))/2); }
 
 async function loadVault(){ state.vault = (await sGet("vault")) || []; }
 
-/* ---------- AI call — goes through OUR OWN secure backend at /api/feedback, not directly to Anthropic ---------- */
+/* ---------- AI calls — go through OUR OWN secure backend, not directly to Anthropic ---------- */
 async function getAIFeedback(question, marks, answer){
   const res = await fetch("/api/feedback", {
     method:"POST",
@@ -253,9 +259,34 @@ async function getAIFeedback(question, marks, answer){
   if(!res.ok){ throw new Error(data.error || ("Server error "+res.status)); }
   return data;
 }
+async function validateCustomQuestion(subjectName, lessonTitle, questionText){
+  const res = await fetch("/api/validate", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ subjectName, lessonTitle, questionText })
+  });
+  const data = await res.json();
+  if(!res.ok){ throw new Error(data.error || ("Server error "+res.status)); }
+  return data;
+}
 
-/* ---------- Navigation ---------- */
-function goto(view, extra){ state.view=view; Object.assign(state, extra||{}); state.error=null; render(); }
+/* ---------- Navigation (with real browser history support) ---------- */
+function stateSnapshot(){
+  return { view: state.view, level: state.level, subjectKey: state.subjectKey, lessonId: state.lessonId,
+    currentQuestion: state.currentQuestion, answerDraft: state.answerDraft, feedback: state.feedback };
+}
+function goto(view, extra){
+  state.view = view; Object.assign(state, extra||{}); state.error = null;
+  history.pushState(stateSnapshot(), "", "#"+view);
+  render();
+}
+window.addEventListener("popstate", (e)=>{
+  if(e.state){
+    Object.assign(state, e.state);
+    state.error = null; state.loading = false; state.validating = false;
+    render();
+  }
+});
 function toast(msg){ state.toast=msg; render(); setTimeout(()=>{ state.toast=null; render(); }, 2400); }
 
 /* ---------- Render ---------- */
@@ -303,7 +334,7 @@ function viewEntry(){
     '<defs><linearGradient id="g1" x1="0" y1="0" x2="120" y2="120"><stop offset="0" stop-color="#00A86B"/><stop offset="1" stop-color="#046B4A"/></linearGradient></defs>'+
     '</svg>'+
     '<h1 class="title">Learn to answer with Clarity</h1>'+
-    '<p class="sub">Ethixo doesn\'t hand you the answer — it coaches you toward it.</p>'+
+    '<p class="sub">Ethixo doesn\'t hand you the answer — it\'ll sharpen yours until it earns full marks.</p>'+
     '<button class="btn btn-primary" onclick="goto(\'level\')">Continue as Demo Student →</button>'+
     '<div class="disabledline">Google / Apple / School ID sign-in — wired up in a later phase</div>'+
   '</div>';
@@ -367,7 +398,7 @@ async function viewQBank(){
     let status = "none", label="Not Attempted";
     if(attempts.length){
       const last = attempts[attempts.length-1];
-      const frac = (last.scoreLow / q.m);
+      const frac = (attemptScore(last) / q.m);
       if(frac >= 0.5){ status="done"; label="Completed · "+attempts.length+" attempt"+(attempts.length>1?"s":""); }
       else { status="review"; label="Needs Review · "+attempts.length+" attempt"+(attempts.length>1?"s":""); }
     }
@@ -396,25 +427,45 @@ function viewCustomQ(){
   const lesson = findLesson();
   return '<div class="card">'+
     '<h1 class="title center">Practice a question of your choice</h1>'+
-    '<p class="sub center">'+lesson.title+' — keep it related to this lesson</p>'+
+    '<p class="sub center">'+lesson.title+' — keep it related to this lesson, and in English</p>'+
     '<label class="field">Type your question</label>'+
-    '<textarea id="customText" placeholder="Type your question here…"></textarea>'+
-    '<label class="field">Adjust Marks: <span id="marksVal">12</span></label>'+
-    '<input type="range" min="1" max="25" value="12" id="marksSlider" oninput="document.getElementById(\'marksVal\').innerText=this.value">'+
+    '<textarea id="customText" placeholder="Type your question here…">'+(state.customDraft||"")+'</textarea>'+
+    '<label class="field">Adjust Marks: <span id="marksVal">'+(state.customMarks||12)+'</span></label>'+
+    '<input type="range" min="1" max="25" value="'+(state.customMarks||12)+'" id="marksSlider" oninput="document.getElementById(\'marksVal\').innerText=this.value">'+
+    (state.error? '<div class="hintbox">'+state.error+'</div>':"")+
     '<div class="row between" style="margin-top:20px;">'+
-      '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
-      '<button class="btn btn-primary" onclick="startCustom()">Start Writing</button>'+
+      '<div class="row">'+
+        '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
+        '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
+      '</div>'+
+      '<button class="btn btn-primary" onclick="startCustom()">'+(state.validating?"Checking…":"Start Writing")+'</button>'+
     '</div>'+
+    (state.validating? '<div class="loading"><div class="spinner"></div>Ethixo is checking your question…</div>':"")+
   '</div>';
 }
-function startCustom(){
+async function startCustom(){
   const t = document.getElementById("customText").value.trim();
   if(!t){ toast("Please type a question first"); return; }
   const m = parseInt(document.getElementById("marksSlider").value,10);
+  state.customDraft = t; state.customMarks = m;
   const lesson = findLesson();
-  state.currentQuestion = { id:"custom-"+Date.now(), level:state.level, subjectKey:state.subjectKey, lessonId:lesson.id, lessonTitle:lesson.title, t, m, custom:true };
-  state.answerDraft = "";
-  goto("answer");
+  state.validating = true; state.error = null; render();
+  try{
+    const check = await validateCustomQuestion(SUBJECT_META[state.subjectKey].name, lesson.title, t);
+    state.validating = false;
+    if(!check.ok){
+      state.error = check.message || "Please adjust your question and try again.";
+      render();
+      return;
+    }
+    state.currentQuestion = { id:"custom-"+Date.now(), level:state.level, subjectKey:state.subjectKey, lessonId:lesson.id, lessonTitle:lesson.title, t, m, custom:true };
+    state.answerDraft = ""; state.customDraft = ""; state.error = null;
+    goto("answer");
+  }catch(e){
+    state.validating = false;
+    state.error = "Couldn't check your question right now. ("+e.message+")";
+    render();
+  }
 }
 
 /* ---- Answer ---- */
@@ -425,10 +476,13 @@ function viewAnswer(){
     '<h1 class="title">Write your Best Answer</h1>'+
     '<p class="qmeta" style="font-size:13px;">'+q.m+' Mark'+(q.m>1?"s":"")+'</p>'+
     '<p style="font-weight:700;color:var(--ink);font-size:16px;">'+q.t+'</p>'+
-    '<textarea id="answerBox" placeholder="Type your answer here…">'+state.answerDraft+'</textarea>'+
+    '<textarea id="answerBox" placeholder="Type your answer here (in English)…">'+state.answerDraft+'</textarea>'+
     (state.error? '<div class="errbox">'+state.error+' <a href="#" onclick="event.preventDefault();submitAnswer()">Try again</a></div>':"")+
     '<div class="row between" style="margin-top:18px;">'+
-      '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
+      '<div class="row">'+
+        '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
+        '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
+      '</div>'+
       '<button class="btn btn-primary" id="reviewBtn" onclick="submitAnswer()">'+(state.loading? "Reviewing…":"Review My Answer")+'</button>'+
     '</div>'+
     (state.loading? '<div class="loading"><div class="spinner"></div>Ethixo is reading your answer…</div>':"")+
@@ -442,9 +496,15 @@ async function submitAnswer(){
   try{
     const q = state.currentQuestion;
     const fb = await getAIFeedback(q.t, q.m, ans);
-    state.feedback = fb; state.loading=false;
+    state.loading=false;
+    if(fb.languageError){
+      state.error = fb.message || "Please write your answer in English.";
+      render();
+      return;
+    }
+    state.feedback = fb;
     const attempts = (await sGet(qKey(q))) || [];
-    attempts.push({ answer:ans, scoreLow:fb.scoreLow, scoreHigh:fb.scoreHigh, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
+    attempts.push({ answer:ans, score:fb.score, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
     await sSet(qKey(q), attempts);
     goto("feedback");
   }catch(e){
@@ -465,12 +525,15 @@ function viewFeedback(){
         '<path id="gaugeArc" d="M10,65 A50,50 0 0 1 110,65" fill="none" stroke="url(#gg)" stroke-width="10" stroke-linecap="round"/>'+
         '<defs><linearGradient id="gg" x1="0" y1="0" x2="120" y2="0"><stop offset="0" stop-color="#00A86B"/><stop offset="1" stop-color="#046B4A"/></linearGradient></defs>'+
       '</svg>'+
-      '<div class="scoretext">Estimated Score<br><b>'+fb.scoreLow+'–'+fb.scoreHigh+' / '+q.m+'</b> Marks</div>'+
+      '<div class="scoretext">Estimated Score<br><b>'+fb.score+' / '+q.m+'</b> Marks</div>'+
     '</div>'+
     '<div class="fb-block"><h4>✅ Strengths</h4><ul class="fb-list ok">'+fb.strengths.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>'+
     '<div class="fb-block"><h4>↗ Next Steps to Strengthen Your Answer</h4><ul class="fb-list next">'+fb.nextSteps.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>'+
     '<div class="row between" style="margin-top:24px;">'+
-      '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
+      '<div class="row">'+
+        '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
+        '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
+      '</div>'+
       '<div class="row">'+
         '<button class="btn btn-outline" onclick="addToVault()">⭐ Add to ScholarVault</button>'+
         '<button class="btn btn-primary" onclick="goto(\'improve\')">Retry Question</button>'+
@@ -482,14 +545,14 @@ function drawGaugeIfPresent(){
   const arc = document.getElementById("gaugeArc");
   if(!arc || !state.feedback) return;
   const q = state.currentQuestion, fb = state.feedback;
-  const frac = Math.max(0, Math.min(1, ((fb.scoreLow+fb.scoreHigh)/2) / q.m));
+  const frac = Math.max(0, Math.min(1, fb.score / q.m));
   const len = 3.14159*50;
   arc.setAttribute("stroke-dasharray", (len*frac)+","+len);
 }
 async function addToVault(){
   const q = state.currentQuestion, fb = state.feedback;
   await loadVault();
-  const item = { qid:qKey(q), level:q.level, subjectKey:q.subjectKey, lessonTitle:q.lessonTitle, t:q.t, m:q.m, answer:state.answerDraft, scoreLow:fb.scoreLow, scoreHigh:fb.scoreHigh, savedAt:Date.now() };
+  const item = { qid:qKey(q), level:q.level, subjectKey:q.subjectKey, lessonTitle:q.lessonTitle, t:q.t, m:q.m, answer:state.answerDraft, score:fb.score, savedAt:Date.now() };
   state.vault = state.vault.filter(v=>v.qid!==item.qid);
   state.vault.push(item);
   await sSet("vault", state.vault);
@@ -500,19 +563,22 @@ async function addToVault(){
 async function viewImprove(){
   const q = state.currentQuestion;
   const attempts = (await sGet(qKey(q))) || [];
-  const best = attempts.reduce((a,b)=> (b.scoreLow>(a?a.scoreLow:-1)? b:a), null);
-  const hist = attempts.map((a,i)=>'<div class="hattempt"><span>Attempt '+(i+1)+(i===attempts.length-1?" (Latest)":"")+'</span><span>'+a.scoreLow+'-'+a.scoreHigh+'/'+q.m+'</span></div>').join("");
+  const best = attempts.reduce((a,b)=> (attemptScore(b)>(a?attemptScore(a):-1)? b:a), null);
+  const hist = attempts.map((a,i)=>'<div class="hattempt"><span>Attempt '+(i+1)+(i===attempts.length-1?" (Latest)":"")+'</span><span>'+attemptScore(a)+'/'+q.m+'</span></div>').join("");
   return '<div class="crumb"><b>'+LEVEL_LABEL[q.level]+'</b> › <b>'+SUBJECT_META[q.subjectKey].name+'</b> › <b>'+q.lessonTitle+'</b></div>'+
   '<div class="card">'+
     '<h1 class="title">Improve Your Answer</h1>'+
-    '<p class="qmeta">Attempts: '+attempts.length+' '+(best? "| Best: "+best.scoreLow+"-"+best.scoreHigh+"/"+q.m:"")+'</p>'+
+    '<p class="qmeta">Attempts: '+attempts.length+' '+(best? "| Best: "+attemptScore(best)+"/"+q.m:"")+'</p>'+
     '<p style="font-weight:700;color:var(--ink);">'+q.t+'</p>'+
     '<div class="history">'+(hist || '<span class="qmeta">No attempts yet</span>')+'</div>'+
     '<label class="field">Your improved answer</label>'+
-    '<textarea id="improveBox" placeholder="Type your answer here…"></textarea>'+
+    '<textarea id="improveBox" placeholder="Type your answer here (in English)…"></textarea>'+
     (state.error? '<div class="errbox">'+state.error+'</div>':"")+
     '<div class="row between" style="margin-top:18px;">'+
-      '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
+      '<div class="row">'+
+        '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
+        '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
+      '</div>'+
       '<button class="btn btn-primary" onclick="submitImprove()">'+(state.loading?"Reviewing…":"Submit My New Answer")+'</button>'+
     '</div>'+
     (state.loading? '<div class="loading"><div class="spinner"></div>Ethixo is reading your answer…</div>':"")+
@@ -526,9 +592,15 @@ async function submitImprove(){
   try{
     const q = state.currentQuestion;
     const fb = await getAIFeedback(q.t, q.m, ans);
-    state.feedback = fb; state.answerDraft = ans; state.loading=false;
+    state.loading=false;
+    if(fb.languageError){
+      state.error = fb.message || "Please write your answer in English.";
+      render();
+      return;
+    }
+    state.feedback = fb; state.answerDraft = ans;
     const attempts = (await sGet(qKey(q))) || [];
-    attempts.push({ answer:ans, scoreLow:fb.scoreLow, scoreHigh:fb.scoreHigh, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
+    attempts.push({ answer:ans, score:fb.score, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
     await sSet(qKey(q), attempts);
     goto("feedback");
   }catch(e){
@@ -542,7 +614,7 @@ function viewVault(){
       '<label class="checklabel">'+
         '<input type="checkbox" data-qid="'+v.qid+'" onchange="toggleVaultSel(\''+v.qid+'\',this.checked)">'+
         '<div><div class="vq">'+v.t+'</div>'+
-        '<div class="vaultmeta">'+LEVEL_LABEL[v.level]+' · '+SUBJECT_META[v.subjectKey].name+' · '+v.lessonTitle+' · '+v.m+' Marks · Score '+v.scoreLow+'-'+v.scoreHigh+' · Saved '+new Date(v.savedAt).toLocaleDateString()+'</div></div>'+
+        '<div class="vaultmeta">'+LEVEL_LABEL[v.level]+' · '+SUBJECT_META[v.subjectKey].name+' · '+v.lessonTitle+' · '+v.m+' Marks · Score '+attemptScore(v)+' · Saved '+new Date(v.savedAt).toLocaleDateString()+'</div></div>'+
       '</label>'+
     '</div>').join("");
   return '<div class="card">'+
@@ -550,7 +622,7 @@ function viewVault(){
     '<p class="sub center">Your Best Answers. Preserved.</p>'+
     (state.vault.length? rows : '<p class="qmeta center">No saved answers yet — add one from the Feedback screen.</p>')+
     '<div class="row between" style="margin-top:22px;">'+
-      '<button class="btn btn-ghost" onclick="goto(\'entry\')">Back</button>'+
+      '<button class="btn btn-ghost" onclick="history.back()">Back</button>'+
       '<button class="btn btn-primary" onclick="goto(\'printview\')" '+(!state.vault.length?"disabled":"")+'>Generate Revision Notes</button>'+
     '</div>'+
   '</div>';
@@ -564,11 +636,11 @@ function viewPrint(){
   const rows = items.map(v=>'<div style="margin-bottom:22px;padding-bottom:16px;border-bottom:1px solid #ddd;">'+
     '<div style="font-weight:700;color:var(--ink);">'+v.t+' <span style="font-weight:400;color:#888;font-size:12px;">('+v.m+' Marks)</span></div>'+
     '<div style="margin:8px 0;white-space:pre-wrap;">'+v.answer+'</div>'+
-    '<div style="font-size:12px;color:#888;">Estimated score: '+v.scoreLow+'-'+v.scoreHigh+'/'+v.m+'</div>'+
+    '<div style="font-size:12px;color:#888;">Estimated score: '+attemptScore(v)+'/'+v.m+'</div>'+
   '</div>').join("");
   return '<div class="card">'+
     '<div class="noprint row between" style="margin-bottom:16px;">'+
-      '<button class="btn btn-ghost" onclick="goto(\'vault\')">Back</button>'+
+      '<button class="btn btn-ghost" onclick="history.back()">Back</button>'+
       '<button class="btn btn-primary" onclick="downloadPDF()">⬇ Download PDF</button>'+
     '</div>'+
     '<h1 class="title">Ethixo Revision Notes</h1>'+
@@ -602,7 +674,7 @@ function downloadPDF(){
     doc.text(aLines, marginX, y); y += aLines.length*13 + 8;
 
     doc.setFontSize(9); doc.setTextColor(140,140,140);
-    doc.text("Estimated score: "+v.scoreLow+"-"+v.scoreHigh+"/"+v.m, marginX, y); y += 26;
+    doc.text("Estimated score: "+attemptScore(v)+"/"+v.m, marginX, y); y += 26;
   });
   doc.save("Ethixo-Revision-Notes.pdf");
   toast("PDF downloaded ⬇");
@@ -621,7 +693,7 @@ function viewPlans(){
         '<ul><li>Unlimited AI feedback</li><li>Full ScholarVault</li><li>Revision notes export</li></ul>'+
         '<button class="btn btn-primary" onclick="toast(\'Billing integration comes in a later phase — this is a design placeholder\')">Subscribe</button></div>'+
     '</div>'+
-    '<div class="row end" style="margin-top:20px;"><button class="btn btn-ghost" onclick="goto(\'entry\')">Back</button></div>'+
+    '<div class="row end" style="margin-top:20px;"><button class="btn btn-ghost" onclick="history.back()">Back</button></div>'+
   '</div>';
 }
 
@@ -631,7 +703,11 @@ window.goto = goto; window.selectBankQuestion = selectBankQuestion; window.start
 window.submitAnswer = submitAnswer; window.addToVault = addToVault; window.submitImprove = submitImprove;
 window.toggleVaultSel = toggleVaultSel; window.downloadPDF = downloadPDF; window.state = state;
 
-(async function init(){ await loadVault(); render(); })();
+(async function init(){
+  await loadVault();
+  history.replaceState(stateSnapshot(), "", "#entry");
+  render();
+})();
 </script>
 </body>
 </html>
