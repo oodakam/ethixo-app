@@ -146,30 +146,112 @@ function mkLesson(id, title, questions){ return { id, title, questions }; }
 const LEVELS = {
   P5: {
     EN: { chapters:[
-      mkChapter("ch1","Chapter 1: Building Strong Compositions", [
-        mkLesson("1.1","1.1 Planning Your Story", [
-          {t:"Name two things you should plan before starting a composition.", m:2},
-          {t:"Explain why a strong opening sentence matters.", m:3},
+      mkChapter("ch1","Part 1: Language Use (Grammar, Vocabulary, Editing, Synthesis & Transformation)", [
+        mkLesson("1.1","1.1 Grammar: Tenses and Verb Forms", [
+          {t:"Complete the sentence with the correct form of the verb in brackets: 'By the time we arrived at the stadium, the match already ___ (start).'", m:1, a:"had started"},
+          {t:"Complete the sentence with the correct form of the verb in brackets: 'She ___ (finish) her homework by the time her mother came home.'", m:1, a:"had finished"},
+          {t:"Complete the sentence with the correct form of the verb in brackets: 'If I ___ (know) about the storm earlier, I would have cancelled the trip.'", m:1, a:"had known"},
+          {t:"Complete the sentence with the correct form of the verb in brackets: 'By next year, I ___ (study) English for six years.'", m:1, a:"will have studied"},
+          {t:"Complete the sentence with the correct form of the verb in brackets, making sure it agrees with the subject: 'The news of his success ___ (surprise) everyone in the family.'", m:1, a:"surprises (accept 'surprised' if consistently used in past tense) \u2014 'news' is treated as a singular subject even though it ends in -s."},
         ]),
-        mkLesson("1.2","1.2 Descriptive Language", [
-          {t:"Give an example of a describing word (adjective) and explain what it adds to a sentence.", m:2},
-          {t:"Explain the difference between 'said' and a more expressive verb such as 'whispered'.", m:3},
+        mkLesson("1.2","1.2 Grammar: Prepositions and Connectives", [
+          {t:"Fill in the blank with the correct preposition: 'The teacher was disappointed ___ the students' poor results.'", m:1, a:"with"},
+          {t:"Fill in the blank with the correct preposition: 'She has been living in Singapore ___ 2015.'", m:1, a:"since"},
+          {t:"Complete the sentence with a suitable connective: '___ it was raining heavily, the football match continued.'", m:1, a:"Although / Even though"},
+          {t:"Complete the sentence with a suitable connective: 'Sarah studied very hard; ___, she failed the test.'", m:1, a:"however"},
+        ]),
+        mkLesson("1.3","1.3 Vocabulary in Context", [
+          {t:"Choose the most suitable word to complete the sentence and explain why it fits best: 'The detective carefully ___ the room for clues.' (searched / observed / glanced)", m:2, a:"searched \u2014 because 'searched for clues' means to look thoroughly and deliberately for something specific, which fits the context better than 'observed' (general watching) or 'glanced' (a very quick look)."},
+          {t:"What does the word 'reluctant' mean in this sentence: 'James was reluctant to share his lunch with his sister.'? Use the word 'reluctant' in a new sentence of your own.", m:2, a:"'Reluctant' means unwilling or hesitant to do something. Any grammatically correct sentence that uses 'reluctant' with this meaning should be accepted, e.g. 'I was reluctant to go outside because it was raining heavily.'"},
+          {t:"Replace the underlined word with a more suitable and stronger word: 'The story was very sad, and it made everyone cry.'", m:1, a:"Accept any suitable stronger synonym for 'sad', e.g. heart-breaking, tragic, sorrowful, moving."},
+          {t:"Fill in the blank with the most suitable word: 'The room was in complete ___ after the party, with cups and plates everywhere.' (chaos / silence / order)", m:1, a:"chaos"},
+          {t:"Explain the meaning of the idiom 'to keep an eye on something' and use it correctly in a sentence of your own.", m:2, a:"It means to watch or look after something carefully. Any grammatically correct sentence using the idiom with this meaning should be accepted, e.g. 'Please keep an eye on my bag while I get some water.'"},
+        ]),
+        mkLesson("1.4","1.4 Editing", [
+          {t:"Identify and correct the grammatical error in this sentence: 'Each of the students have completed their project.'", m:2, a:"'Each of the students has completed their project.' (the subject 'each' is singular and takes the singular verb 'has')"},
+          {t:"Identify and correct the grammatical error in this sentence: 'My brother and me went to the market yesterday.'", m:2, a:"'My brother and I went to the market yesterday.' (use the subject pronoun 'I', not the object pronoun 'me')"},
+          {t:"Identify and correct the grammatical error in this sentence: 'She don't like to eat vegetables.'", m:1, a:"'She doesn't like to eat vegetables.' (the third person singular subject 'she' requires 'doesn't', not 'don't')"},
+          {t:"Identify and correct the grammatical error in this sentence: 'There is many reasons why he was late.'", m:1, a:"'There are many reasons why he was late.' (the plural subject 'reasons' requires the plural verb 'are')"},
+        ]),
+        mkLesson("1.5","1.5 Synthesis and Transformation", [
+          {t:"Combine the two sentences into one, using the word given: 'The rain stopped. We continued our walk.' (Use: As soon as)", m:2, a:"As soon as the rain stopped, we continued our walk."},
+          {t:"Rewrite the sentence using the word given, without changing its meaning: 'Tom is too young to drive a car.' (Use: so...that)", m:2, a:"Tom is so young that he cannot drive a car."},
+          {t:"Combine the two sentences into one, using the word given: 'He was very tired. He finished his homework.' (Use: Although)", m:2, a:"Although he was very tired, he finished his homework."},
+          {t:"Rewrite this sentence in reported speech: 'I will call you tomorrow,' Mary said to John.", m:2, a:"Mary said that she would call John the following day (accept: the next day)."},
+          {t:"Rewrite the sentence in the passive voice: 'The gardener watered the plants every morning.'", m:2, a:"The plants were watered by the gardener every morning."},
         ]),
       ]),
-      mkChapter("ch2","Chapter 2: Grammar in Use", [], true),
+      mkChapter("ch2","Part 2: Writing Tasks (Situational & Composition)", [
+        mkLesson("2.1","2.1 Situational Writing", [
+          {t:"Your class is organising a recycling drive at school. Write a notice to inform your classmates about the event, including what items to bring, and when and where to submit them.", m:8, a:"A strong response should include: a clear heading/title for the notice; the purpose of the event stated clearly; specific items that can be recycled; the date, time and drop-off location; a polite closing instruction or note of thanks; simple, clear sentences suitable for a notice."},
+          {t:"You borrowed a book from your friend and accidentally spilled water on it. Write a text message to your friend, apologising and explaining what happened, and what you plan to do about it.", m:8, a:"A strong response should include: a friendly, appropriate greeting; a clear and honest explanation of what happened; a sincere apology; a stated plan to make up for it (e.g. replace or repair the book); a polite closing."},
+          {t:"Write a diary entry about a day when you helped someone in your neighbourhood. Describe what happened and how it made you feel.", m:10, a:"A strong response should include: an appropriate diary-entry opening (e.g. a date); events recounted in a logical sequence; specific details of how the person was helped; genuine reflection on the writer's own feelings; an informal, personal tone throughout."},
+          {t:"Your school is holding a talent show and you would like to invite your parents. Write an email to your parents giving them the details of the event and encouraging them to attend.", m:8, a:"A strong response should include: an appropriate email greeting and closing; clear event details (what, when, where); a genuine reason or encouragement for the parents to attend; a polite and respectful tone suitable for writing to parents."},
+          {t:"You saw a younger student being teased by classmates. Write a short note to your teacher describing what you saw and explaining why you think it is important to address it.", m:8, a:"A strong response should include: a clear, factual description of what was observed; an explanation of why the behaviour is a concern; a respectful tone appropriate for writing to a teacher; a suggestion or request for the teacher to take action."},
+          {t:"Your neighbour's cat has gone missing. Write a short poster message describing the cat and asking for help finding it.", m:6, a:"A strong response should include: a clear heading (e.g. 'Missing Cat'); a description of the cat's appearance; where and when it was last seen; how to contact the owner if found; a polite request for help."},
+        ]),
+        mkLesson("2.2","2.2 Composition (Continuous Writing)", [
+          {t:"Write a story about a time when you had to make a difficult decision. In your story, explain what the decision was, why it was difficult, and what you learned from it.", m:12, a:"A strong response should include: a clear beginning, middle and end; a well-established situation and the difficult decision faced; descriptive details and, where suitable, dialogue; the character's thoughts and feelings; a clear reflection or lesson learned at the end; correct grammar and varied vocabulary and sentence structures."},
+          {t:"Write a story that begins with: 'The old chest in the attic had been locked for years, but today, everything was about to change.'", m:12, a:"A strong response should include: a story that continues logically and creatively from the given opening; a clear plot with a beginning, middle and satisfying end; descriptive language that builds atmosphere or suspense; consistent characters and setting; correct grammar and varied sentence structures; overall creativity and coherence."},
+        ]),
+      ]),
     ]},
     SCI: { chapters:[
-      mkChapter("ch1","Chapter 1: Plants and Their Needs", [
-        mkLesson("1.1","1.1 What Plants Need to Grow", [
-          {t:"Name three things a plant needs to grow well.", m:3},
-          {t:"Explain what happens to a plant that does not get enough sunlight.", m:3},
+      mkChapter("ch1","Part 1: Cycles", [
+        mkLesson("1.1","1.1 Reproduction in Plants", [
+          {t:"Name the part of a flower that produces pollen.", m:1, a:"The anther (part of the stamen, the male part of the flower)."},
+          {t:"What is the term for the transfer of pollen from the anther to the stigma of a flower?", m:1, a:"Pollination."},
+          {t:"Explain what happens during fertilisation in a flowering plant.", m:2, a:"The pollen grain joins with the egg cell inside the ovule of the flower; this joining is called fertilisation, and it allows a seed to eventually form."},
+          {t:"Describe ONE way seeds can be dispersed from a plant to a new location.", m:2, a:"Accept any reasonable method: carried by wind; carried by water; carried by animals (e.g. seeds with hooks stick to animal fur, or fruit is eaten and seeds are later excreted elsewhere)."},
+          {t:"Explain why flowers usually need to be pollinated before they can produce seeds.", m:2, a:"Pollination allows pollen to reach the stigma, which is needed for fertilisation to take place; without fertilisation, the flower cannot develop into a fruit containing seeds."},
         ]),
-        mkLesson("1.2","1.2 Parts of a Plant", [
-          {t:"Name one function of a plant's roots.", m:2},
-          {t:"Explain why leaves are important to a plant.", m:3},
+        mkLesson("1.2","1.2 Reproduction in Animals", [
+          {t:"What is the name of the male reproductive cell that joins with the female egg cell during fertilisation in humans?", m:1, a:"Sperm."},
+          {t:"After fertilisation occurs in humans, where does the fertilised egg develop into a baby?", m:1, a:"In the womb (uterus) of the mother."},
+          {t:"Describe how a human baby receives nutrients while developing inside the mother's womb.", m:2, a:"The baby receives nutrients and oxygen from the mother through the umbilical cord, which is connected to the placenta."},
+          {t:"Explain why sexual reproduction is important for living things, such as humans.", m:2, a:"It allows living things to produce offspring and pass on their characteristics to the next generation, ensuring the continuity of their kind."},
+        ]),
+        mkLesson("1.3","1.3 Water and Changes of State", [
+          {t:"Name the THREE states of matter that water can exist in.", m:1, a:"Solid (ice), liquid (water), and gas (water vapour)."},
+          {t:"What is the term for the change of state when liquid water turns into water vapour?", m:1, a:"Evaporation."},
+          {t:"What is the term for the change of state when water vapour turns back into liquid water?", m:1, a:"Condensation."},
+          {t:"Describe what happens to the particles in water when it is heated and eventually boils.", m:2, a:"As water is heated, its particles gain energy and move faster and further apart, until the water changes from a liquid into a gas (water vapour) \u2014 this is boiling."},
+        ]),
+        mkLesson("1.4","1.4 The Water Cycle", [
+          {t:"Name the process by which water from oceans, rivers and lakes turns into water vapour and rises into the air.", m:1, a:"Evaporation."},
+          {t:"Describe what happens when water vapour in the atmosphere cools and forms clouds.", m:2, a:"The water vapour condenses into tiny water droplets, which group together in the atmosphere to form clouds."},
+          {t:"What is the term for water falling from clouds back to the Earth's surface, such as rain?", m:1, a:"Precipitation."},
+          {t:"Explain why the water cycle is important for the Earth's environment.", m:2, a:"The water cycle continuously recycles water between the Earth's surface and the atmosphere, providing fresh water for living things and helping to maintain ecosystems."},
+          {t:"Describe ONE way people can help conserve water at home.", m:2, a:"Accept any reasonable example: turning off taps when not in use; fixing leaking pipes; taking shorter showers; reusing water (e.g. for watering plants)."},
         ]),
       ]),
-      mkChapter("ch2","Chapter 2: Materials Around Us", [], true),
+      mkChapter("ch2","Part 2: Systems", [
+        mkLesson("2.1","2.1 Plant Transport System", [
+          {t:"Name the plant part that absorbs water and minerals from the soil.", m:1, a:"The roots."},
+          {t:"Describe the function of the stem in a plant's transport system.", m:2, a:"The stem transports water and minerals from the roots up to the leaves, and transports food made in the leaves to other parts of the plant."},
+          {t:"Which plant part carries out photosynthesis to make food for the plant?", m:1, a:"The leaves."},
+          {t:"Explain how water travels from the roots to the leaves of a plant.", m:2, a:"Water is absorbed by the roots and travels upward through tiny tubes inside the stem until it reaches the leaves."},
+        ]),
+        mkLesson("2.2","2.2 Human Respiratory System", [
+          {t:"Name TWO organs that are part of the human respiratory system.", m:1, a:"Accept any 2: nose, trachea (windpipe), lungs."},
+          {t:"Describe what happens to air as it passes through the nose before reaching the lungs.", m:2, a:"As air passes through the nose, it is warmed, moistened, and filtered (dust and germs are trapped) before travelling further into the body."},
+          {t:"Explain what happens to oxygen and carbon dioxide when air reaches the lungs.", m:2, a:"Oxygen from the air passes into the blood in the lungs, while carbon dioxide from the blood passes into the lungs to be breathed out."},
+          {t:"Why do humans need to breathe continuously?", m:2, a:"Breathing takes in oxygen, which the body's cells need to release energy from food, and it removes carbon dioxide, a waste product of this process."},
+        ]),
+        mkLesson("2.3","2.3 Human Circulatory System", [
+          {t:"Name the main organ that pumps blood around the human body.", m:1, a:"The heart."},
+          {t:"What is the function of blood vessels in the human circulatory system?", m:1, a:"Blood vessels carry blood to and from all parts of the body."},
+          {t:"Describe TWO substances that blood transports around the human body.", m:2, a:"Accept any 2: oxygen, nutrients (digested food), carbon dioxide, or other waste products."},
+          {t:"Explain why the circulatory system is important for the human body.", m:2, a:"It transports oxygen and nutrients to all parts of the body and removes waste products such as carbon dioxide, keeping the body's cells supplied with what they need to function."},
+        ]),
+        mkLesson("2.4","2.4 Electrical Systems", [
+          {t:"Name ONE component, other than the energy source, that is needed to complete an electric circuit.", m:1, a:"Accept any: connecting wires, a bulb or other electrical device, a switch."},
+          {t:"Explain why a circuit must be closed (complete) for an electrical device in it to work.", m:2, a:"A closed circuit provides a complete path for electric current to flow; if the circuit is open or broken, current cannot flow and the device will not work."},
+          {t:"What is the difference between an electrical conductor and an electrical insulator?", m:2, a:"A conductor allows electric current to pass through it easily (e.g. metals such as copper), while an insulator does not allow current to pass through it easily (e.g. plastic or rubber)."},
+          {t:"Give ONE example of a material that is a good electrical conductor, and ONE example of a material that is a good electrical insulator.", m:2, a:"Conductor: e.g. copper or another metal. Insulator: e.g. plastic or rubber."},
+          {t:"Explain what happens to the brightness of a bulb in a circuit if more batteries are added in series.", m:2, a:"The bulb becomes brighter, because adding more batteries in series increases the electrical energy supplied, increasing the current flowing through the circuit."},
+        ]),
+      ]),
     ]},
     SS: { chapters:[
       mkChapter("ch1","Part 1: Singapore's Development as a Nation", [
@@ -227,30 +309,106 @@ const LEVELS = {
   },
   P6: {
     EN: { chapters:[
-      mkChapter("ch1","Chapter 1: Comprehension & Composition Skills", [
-        mkLesson("1.1","1.1 Understanding the Passage", [
-          {t:"What is the main idea of a paragraph, and how can you identify it quickly?", m:3},
-          {t:"Explain the difference between a fact and an opinion in a passage.", m:2},
+      mkChapter("ch1","Part 1: Language Use (Grammar, Vocabulary, Editing, Synthesis & Transformation)", [
+        mkLesson("1.1","1.1 Grammar: Tenses and Complex Structures", [
+          {t:"Complete the sentence with the correct form of the verb in brackets: 'No sooner ___ (the bell / ring) than the students rushed out of the classroom.'", m:2, a:"had the bell rung (inversion is required after the phrase 'no sooner' at the start of a sentence)"},
+          {t:"Complete the sentence with the correct form of the verb in brackets: 'By the time the rescue team arrived, the hikers ___ (already / find) their way down the mountain.'", m:1, a:"had already found"},
+          {t:"Complete the sentence with the correct form of the verb in brackets: 'If the government ___ (not / act) quickly, the situation could have become much worse.'", m:2, a:"had not acted"},
+          {t:"Complete the sentence with the correct form of the verb in brackets: 'She insisted that the report ___ (submit) by Friday.'", m:2, a:"be submitted (the subjunctive form is used after 'insisted that')"},
+          {t:"Complete the sentence with the correct form of the verb in brackets: 'Having ___ (finish) his chores, Ryan was finally free to play.'", m:1, a:"finished"},
         ]),
-        mkLesson("1.2","1.2 Writing with Purpose", [
-          {t:"Describe one way a writer creates suspense in a story opening.", m:5},
-          {t:"Explain why choosing strong verbs improves a composition.", m:3},
+        mkLesson("1.2","1.2 Grammar: Prepositions, Modals and Connectives", [
+          {t:"Fill in the blank with the correct preposition: 'The company is renowned ___ its excellent customer service.'", m:1, a:"for"},
+          {t:"Fill in the blank with the correct modal verb: 'You ___ hand in your project by Monday; there are no extensions.'", m:1, a:"must"},
+          {t:"Complete the sentence with a suitable connective: '___ the heavy traffic, we managed to reach the airport on time.'", m:1, a:"Despite / In spite of"},
+          {t:"Complete the sentence with a suitable connective: 'He trained every day ___ he could qualify for the national team.'", m:1, a:"so that"},
+          {t:"Complete the sentence with a suitable connective: 'You will not pass the exam ___ you revise your work carefully.'", m:1, a:"unless"},
+        ]),
+        mkLesson("1.3","1.3 Vocabulary in Context", [
+          {t:"Choose the most suitable word to complete the sentence and explain why it fits best: 'The negotiations were ___, lasting for hours without any resolution.' (tedious / brief / exciting)", m:2, a:"tedious \u2014 because it means long, tiring and dull, which matches a negotiation that dragged on for hours without being resolved."},
+          {t:"What does the word 'meticulous' mean? Use it correctly in a sentence of your own.", m:2, a:"'Meticulous' means very careful and precise, paying great attention to detail. Any grammatically correct sentence using the word with this meaning should be accepted, e.g. 'The scientist kept meticulous records of every experiment.'"},
+          {t:"Replace the underlined word with a stronger, more precise word: 'She was happy when she received the scholarship.'", m:1, a:"Accept any suitable stronger synonym for 'happy', e.g. elated, overjoyed, thrilled."},
+          {t:"Fill in the blank with the most suitable word: 'The old warehouse was completely ___ after the fire, with nothing left standing.' (renovated / destroyed / decorated)", m:1, a:"destroyed"},
+          {t:"Explain the meaning of the idiom 'to bite the bullet' and use it correctly in a sentence of your own.", m:2, a:"It means to face a difficult or unpleasant situation bravely and without avoiding it. Any grammatically correct sentence using the idiom with this meaning should be accepted, e.g. 'After weeks of hesitation, he finally bit the bullet and told his parents the truth.'"},
+          {t:"Explain the difference in meaning between 'economic' and 'economical', then use 'economical' correctly in a sentence.", m:2, a:"'Economic' relates to the economy or financial matters in general, while 'economical' means using money, time or resources carefully and without waste. Any correct sentence using 'economical' with this meaning should be accepted, e.g. 'We bought an economical car that uses very little fuel.'"},
+        ]),
+        mkLesson("1.4","1.4 Editing", [
+          {t:"Identify and correct the grammatical error in this sentence: 'The committee have decided to postpone the meeting.'", m:2, a:"'The committee has decided to postpone the meeting.' (a collective noun like 'committee' is usually treated as singular when it acts as one unit)"},
+          {t:"Identify and correct the grammatical error in this sentence: 'Neither the teacher nor the students was aware of the schedule change.'", m:2, a:"'Neither the teacher nor the students were aware of the schedule change.' (with 'neither...nor', the verb agrees with the noun closer to it \u2014 'students', which is plural)"},
+          {t:"Identify and correct the grammatical error in this sentence: 'By the time we reached the cinema, the movie has already started.'", m:2, a:"'By the time we reached the cinema, the movie had already started.' (the past perfect tense is needed for an action completed before another past action)"},
+          {t:"Identify and correct the grammatical error in this sentence: 'One of the main reason for the delay was bad weather.'", m:1, a:"'One of the main reasons for the delay was bad weather.' ('one of the main' should be followed by a plural noun, 'reasons')"},
+          {t:"Identify and correct the grammatical error in this sentence: 'Every one of the passengers were asked to fasten their seatbelts.'", m:2, a:"'Every one of the passengers was asked to fasten their seatbelts.' ('every one of' takes a singular verb)"},
+        ]),
+        mkLesson("1.5","1.5 Synthesis and Transformation", [
+          {t:"Combine the two sentences into one, using the words given: 'The manager arrived. The staff began working harder.' (Use: No sooner...than)", m:2, a:"No sooner had the manager arrived than the staff began working harder."},
+          {t:"Rewrite the sentence using the word given, without changing its meaning: 'The heat was so intense that no one could stay outdoors.' (Use: such)", m:2, a:"It was such intense heat that no one could stay outdoors."},
+          {t:"Combine the two sentences into one, using the word given: 'You must complete the form. Otherwise, your application will not be considered.' (Use: Unless)", m:2, a:"Unless you complete the form, your application will not be considered."},
+          {t:"Rewrite the sentence in the passive voice: 'The government has implemented new regulations to reduce pollution.'", m:2, a:"New regulations have been implemented by the government to reduce pollution."},
+          {t:"Rewrite this sentence in reported speech: 'I have already submitted my assignment,' Ethan told his teacher.", m:2, a:"Ethan told his teacher that he had already submitted his assignment."},
+          {t:"Combine the two sentences into one, using the word given: 'It was raining heavily. The marathon runners continued the race.' (Use: Despite)", m:2, a:"Despite the heavy rain, the marathon runners continued the race."},
         ]),
       ]),
-      mkChapter("ch2","Chapter 2: Situational Writing", [], true),
+      mkChapter("ch2","Part 2: Writing Tasks (Situational & Composition)", [
+        mkLesson("2.1","2.1 Situational Writing", [
+          {t:"You are the class chairperson. Your form teacher has asked you to write an email to your classmates informing them about a change in the venue for the upcoming Sports Day, and reminding them what to bring.", m:10, a:"A strong response should include: an appropriate email greeting and closing; a clear statement of the venue change; a brief reason for the change (if relevant); a reminder of items to bring and the date/time; a tone appropriate for a class chairperson addressing classmates."},
+          {t:"Your school library is looking for student volunteers to help during the June holidays. Write a formal letter to the school librarian expressing your interest and explaining why you would be suitable for the role.", m:12, a:"A strong response should include: correct formal letter format (address, salutation, closing); a clear statement of interest in the role; relevant reasons or personal qualities suited to the role; a polite, respectful and formal tone throughout; a closing statement of availability or thanks."},
+          {t:"You noticed that recycling bins in your estate are often used incorrectly. Write a letter to your Town Council suggesting ways to improve recycling habits among residents.", m:12, a:"A strong response should include: correct formal letter format; a clear description of the problem observed; specific, practical suggestions for improvement; a polite and constructive tone; a closing call to action or thanks."},
+          {t:"As the head prefect, you have been asked to give a short speech at the school assembly to encourage students to be more environmentally responsible. Write the speech.", m:12, a:"A strong response should include: an appropriate opening address to the audience; a clear message or purpose; persuasive points supported with examples; a call to action; a tone suitable for a speech (engaging, confident, respectful); a clear closing."},
+          {t:"Write a diary entry reflecting on your final year in primary school, including a memorable experience and how you feel about moving on to secondary school.", m:10, a:"A strong response should include: an appropriate diary-entry opening; a specific, well-described memorable experience; genuine reflection on feelings about the transition to secondary school; an informal, personal tone; a natural, clear conclusion."},
+        ]),
+        mkLesson("2.2","2.2 Composition (Continuous Writing)", [
+          {t:"Write a story about a time when honesty was difficult but important. In your story, describe the situation, the choice made, and its consequences.", m:18, a:"A strong response should include: a clear beginning, middle and end; a well-developed situation that tests honesty; believable characters, dialogue and descriptive details; a clear consequence or lesson arising from the choice made; correct grammar, varied vocabulary and sentence structures appropriate for PSLE-level writing."},
+          {t:"Write a story that ends with: '...and from that day on, I never took my family for granted again.'", m:18, a:"A strong response should include: a story that builds logically towards the given ending; a clear plot with rising tension and a satisfying resolution; descriptive and emotive language; consistent characters and setting; the ending sentence integrated naturally and meaningfully; correct grammar and sophisticated sentence structures."},
+        ]),
+      ]),
     ]},
     SCI: { chapters:[
-      mkChapter("ch1","Chapter 1: Living Things and Their Environment", [
-        mkLesson("1.1","1.1 Life Cycles", [
-          {t:"Explain one difference between complete and incomplete metamorphosis.", m:5},
-          {t:"Name two conditions needed for a seed to germinate.", m:2},
+      mkChapter("ch1","Part 1: Energy", [
+        mkLesson("1.1","1.1 Photosynthesis and Energy from the Sun", [
+          {t:"What is the main source of energy for almost all living things?", m:1, a:"The Sun."},
+          {t:"Name TWO substances that plants take in during photosynthesis.", m:1, a:"Carbon dioxide and water."},
+          {t:"What substance in the leaves of a plant helps to trap light energy from the Sun?", m:1, a:"Chlorophyll."},
+          {t:"Name the TWO products formed during photosynthesis.", m:1, a:"Food (glucose/sugar) and oxygen."},
+          {t:"Where does the water used in photosynthesis mainly come from?", m:1, a:"It is absorbed by the roots from the soil."},
+          {t:"How does carbon dioxide mainly enter a plant's leaves?", m:1, a:"Through tiny openings on the leaves called stomata."},
+          {t:"Describe what a plant needs for photosynthesis to take place.", m:2, a:"Light energy (from the Sun or a light source), water, and carbon dioxide."},
+          {t:"Explain why photosynthesis is important not just for plants, but for other living things as well.", m:2, a:"Photosynthesis produces food that animals obtain energy from, either by eating plants directly or by eating other animals that have eaten plants; it also releases oxygen, which living things need for respiration."},
+          {t:"Explain how animals obtain the energy they need to survive, given that only plants and some other organisms can carry out photosynthesis.", m:2, a:"Animals cannot make their own food, so they obtain energy indirectly, either by eating plants or by eating other animals that have eaten plants."},
         ]),
-        mkLesson("1.2","1.2 Interactions Within the Environment", [
-          {t:"Describe one way a change in habitat can affect an animal's survival.", m:5},
-          {t:"What is meant by a 'food chain'?", m:2},
+        mkLesson("1.2","1.2 Energy Conversion", [
+          {t:"Name TWO forms of energy.", m:1, a:"Accept any 2: kinetic, potential, light, electrical, sound, heat."},
+          {t:"What form of energy does a moving object have?", m:1, a:"Kinetic energy."},
+          {t:"What form of energy does a stretched rubber band or a raised object have?", m:1, a:"Potential energy (elastic potential energy for the stretched rubber band; gravitational potential energy for the raised object)."},
+          {t:"Describe the energy conversion that takes place when an electric light bulb is switched on.", m:2, a:"Electrical energy is converted into light energy (and some heat energy)."},
+          {t:"Describe the energy conversion that takes place when a ball is thrown up into the air and falls back down.", m:2, a:"As the ball rises, its kinetic energy is converted into potential energy (it slows down and gains height); as it falls back down, the potential energy is converted back into kinetic energy."},
+          {t:"Explain the energy conversion that occurs in a solar panel.", m:2, a:"Light energy from the Sun is converted into electrical energy."},
+          {t:"Give ONE example from everyday life of chemical energy being converted into kinetic energy.", m:2, a:"Accept any reasonable example: food (chemical energy) digested in the body is used by muscles to move; fuel (chemical energy) burned in a car or motorcycle engine makes the vehicle move."},
         ]),
       ]),
-      mkChapter("ch2","Chapter 2: Cycles in Matter and Water", [], true),
+      mkChapter("ch2","Part 2: Interactions", [
+        mkLesson("2.1","2.1 Interaction of Forces", [
+          {t:"What is the term for the force that acts to slow down or oppose motion between two surfaces in contact?", m:1, a:"Friction (frictional force)."},
+          {t:"Describe ONE way friction can be reduced between two surfaces.", m:2, a:"Accept any reasonable method: making the surfaces smoother; adding a lubricant such as oil; reducing contact by using wheels or rollers."},
+          {t:"What is the force that pulls objects towards the Earth called?", m:1, a:"Gravitational force (gravity)."},
+          {t:"Explain why a feather falls more slowly than a metal ball when both are dropped from the same height, even though gravity acts on both.", m:2, a:"Air resistance, a form of friction, acts more strongly on the feather because of its larger surface area relative to its weight, slowing its fall more than the heavier, more compact metal ball."},
+          {t:"What happens to a spring when a force is applied to stretch or compress it?", m:1, a:"The spring changes shape (stretches or compresses) and exerts a force of its own (elastic/spring force) as it tries to return to its original shape."},
+          {t:"Describe how a spring can be used to measure the weight of an object.", m:2, a:"The object is hung on the spring (e.g. in a spring scale); the spring stretches by an amount related to the object's weight, which can be read off a marked scale."},
+          {t:"Give ONE example of friction being useful in everyday life.", m:1, a:"Accept any reasonable example: friction between shoes and the ground allows us to walk without slipping; friction in brakes helps a bicycle or car to stop."},
+          {t:"Give ONE example of friction being a problem in everyday life, and describe how it might be reduced.", m:2, a:"Accept any reasonable example, e.g. friction between moving machine parts causes wear and generates heat; this can be reduced by adding a lubricant such as oil."},
+          {t:"Explain why it is more difficult to push a heavy box across a rough floor than across a smooth floor.", m:2, a:"A rough floor has more friction between the surfaces in contact, which opposes the motion of the box more strongly than a smooth floor would."},
+        ]),
+        mkLesson("2.2","2.2 Interactions within the Environment", [
+          {t:"What is a food chain?", m:1, a:"A food chain shows the transfer of energy from one living thing to another, usually starting with a producer such as a plant."},
+          {t:"In a food chain, what is the term for an organism that makes its own food?", m:1, a:"A producer."},
+          {t:"What is the term for an organism that breaks down dead plants and animals, returning nutrients to the soil?", m:1, a:"A decomposer."},
+          {t:"Explain the difference between a food chain and a food web.", m:2, a:"A food chain shows a single sequence of feeding relationships between organisms, while a food web shows several interconnected food chains, showing how different organisms in a habitat are linked through multiple feeding relationships."},
+          {t:"Give ONE example of a structural adaptation in an organism and explain how it helps the organism survive.", m:2, a:"Accept any reasonable example, e.g. a cactus has thick, waxy skin that reduces water loss, helping it survive in a dry habitat with little water."},
+          {t:"Give ONE example of a behavioural adaptation in an organism and explain how it helps the organism survive.", m:2, a:"Accept any reasonable example, e.g. some animals hibernate during winter to conserve energy when food is scarce."},
+          {t:"Describe ONE way human activities can negatively affect the environment.", m:2, a:"Accept any reasonable example: deforestation destroys habitats and reduces biodiversity; pollution can harm living things and damage ecosystems."},
+          {t:"Explain why the removal of decomposers from an ecosystem could negatively affect the environment.", m:2, a:"Without decomposers, dead plants and animals would not be broken down, so nutrients would not be returned to the soil; this would affect plant growth and, in turn, the whole ecosystem that depends on those plants."},
+          {t:"Describe how a change in temperature could affect the survival of organisms in an environment.", m:2, a:"Accept any reasonable example: extreme temperatures may go beyond what organisms can tolerate; changes in temperature can also affect the amount of water available (e.g. freezing reduces liquid water, higher temperatures increase evaporation), affecting organisms' ability to survive."},
+        ]),
+      ]),
     ]},
     SS: { chapters:[
       mkChapter("ch1","Chapter 1: Discovering Southeast Asia", [
