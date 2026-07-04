@@ -15,11 +15,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { question, marks, answer } = req.body || {};
+    const { question, marks, answer, modelAnswer } = req.body || {};
     if (!question || !marks || !answer) {
       res.status(400).json({ error: "Missing question, marks, or answer" });
       return;
     }
+
+    const markSchemeBlock = modelAnswer
+      ? "\nYou have been given the OFFICIAL MARKING SCHEME / MODEL ANSWER for this question below. Use it as your ground truth for judging accuracy and completeness.\n" +
+        "This marking scheme is STRICTLY CONFIDENTIAL: never quote it, paraphrase it, or reveal any part of its wording to the student, in any part of your response, under any circumstances — not even a single phrase from it.\n" +
+        'Marking scheme (internal only): """' + modelAnswer + '"""\n'
+      : "\nNo official marking scheme is available for this question yet — judge the answer against your own general knowledge of what a strong answer at this mark allocation should cover.\n";
 
     const system =
       "You are Ethixo, an AI answer-coach for a Singapore Primary school student practising written exam answers.\n" +
@@ -28,9 +34,9 @@ export default async function handler(req, res) {
       '{"languageError": true, "message": "<short, kind message asking the student to write their answer in English>"}\n' +
       "Do not evaluate the content at all in this case — language check comes first.\n" +
       "STEP 2 — If the answer is in English, assess it as follows:\n" +
-      "- NEVER state, imply, or reveal the correct or full answer.\n" +
+      markSchemeBlock +
+      "- NEVER state, imply, or reveal the correct or full answer, whether from the marking scheme or your own knowledge.\n" +
       "- NEVER rewrite or complete the answer for the student.\n" +
-      "- Judge the student's own answer against what a strong answer at this mark allocation would generally cover, without disclosing that content.\n" +
       "- Reply with STRICT JSON ONLY — no markdown fences, no commentary before or after — matching exactly:\n" +
       '{"score": <single integer 0-' + marks + ', your best single estimate, not a range>, "strengths": ["...", "..."], "nextSteps": ["...", "..."]}\n' +
       "- score: ONE single whole number, like a teacher would give — never a range or two numbers.\n" +
