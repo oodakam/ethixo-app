@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ethixo — Learn to answer with Clarity</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
@@ -17,11 +18,12 @@
     --radius:18px; --shadow:0 4px 18px rgba(24,36,32,.07);
   }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Plus Jakarta Sans',sans-serif;}
-  h1,h2,h3,.logo{font-family:'Fraunces',serif;}
-  #app{max-width:920px;margin:0 auto;padding:30px 20px 84px;min-height:100vh;}
+  html,body{height:100%;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Montserrat',sans-serif;display:flex;flex-direction:column;min-height:100vh;}
+  h1,h2,h3,.logo{font-family:'Montserrat',sans-serif;}
+  #app{max-width:920px;margin:0 auto;padding:30px 20px 24px;width:100%;flex:1 0 auto;}
   .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:10px;}
-  .logo{font-weight:700;font-size:27px;background:linear-gradient(115deg,var(--brand),var(--brand-deep) 75%);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:-.5px;cursor:pointer;}
+  .logo{font-weight:800;font-size:27px;color:var(--brand);letter-spacing:-.5px;cursor:pointer;}
   .badge{font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:3px 11px;background:var(--card);font-weight:600;}
   .topbtns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
   .vault-link{border:1.5px solid var(--brand);color:var(--brand-deep);background:#fff;border-radius:11px;padding:8px 15px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;}
@@ -44,7 +46,7 @@
   .choice .emoji{font-size:34px;display:block;margin-bottom:10px;}
   .choice h3{margin:4px 0 2px;font-size:17px;color:var(--ink);}
   .choice p{margin:0;color:var(--muted);font-size:12.5px;}
-  .btn{border:none;border-radius:12px;padding:13px 22px;font-weight:700;font-size:14.5px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:.15s;}
+  .btn{border:none;border-radius:12px;padding:13px 22px;font-weight:700;font-size:14.5px;cursor:pointer;font-family:'Montserrat',sans-serif;transition:.15s;}
   .btn:disabled{opacity:.45;cursor:not-allowed;}
   .btn-primary{background:linear-gradient(120deg,var(--brand),var(--brand-dark));color:#fff;}
   .btn-primary:hover:not(:disabled){filter:brightness(1.06);}
@@ -71,7 +73,7 @@
   .status.done{background:var(--brand-light);color:var(--brand-deep);}
   .status.review{background:var(--amber-bg);color:var(--amber);}
   .status.none{background:#eee;color:#888;}
-  textarea{width:100%;border:1.5px solid var(--border);border-radius:12px;padding:14px;font-family:'Plus Jakarta Sans',sans-serif;font-size:14.5px;resize:vertical;min-height:130px;}
+  textarea{width:100%;border:1.5px solid var(--border);border-radius:12px;padding:14px;font-family:'Montserrat',sans-serif;font-size:14.5px;resize:vertical;min-height:130px;}
   textarea:focus,input:focus,.choice:focus-visible,.btn:focus-visible{outline:3px solid var(--brand-light-b);outline-offset:1px;}
   input[type=range]{width:100%;accent-color:var(--brand);}
   label.field{font-weight:700;color:var(--ink);font-size:13.5px;display:block;margin:16px 0 6px;}
@@ -102,7 +104,10 @@
   .checklabel{display:flex;align-items:flex-start;gap:8px;}
   .pricecard{border:2px solid var(--border);border-radius:var(--radius);padding:26px;text-align:center;background:#fff;}
   .pricecard.hi{border-color:var(--brand);background:var(--brand-light);}
-  .pricecard .amt{font-size:30px;font-weight:800;color:var(--ink);margin:10px 0;font-family:'Fraunces',serif;}
+  .pricecard .amt{font-size:30px;font-weight:800;color:var(--ink);margin:10px 0;font-family:'Montserrat',sans-serif;}
+  .site-footer{max-width:920px;margin:0 auto;padding:0 20px 30px;text-align:center;flex-shrink:0;width:100%;box-sizing:border-box;}
+  .site-footer .f1{font-size:12px;font-weight:500;color:var(--muted);margin:0;}
+  .site-footer .f2{font-size:9.5px;color:#7c847e;margin:4px 0 0;}
   .pricecard ul{list-style:none;padding:0;margin:14px 0;text-align:left;font-size:13.5px;color:var(--ink);}
   .pricecard ul li{padding:5px 0;}
   .pricecard ul li::before{content:"✓ ";color:var(--brand-deep);font-weight:800;}
@@ -116,6 +121,10 @@
 </head>
 <body>
 <div id="app"></div>
+<footer class="site-footer">
+  <p class="f1">A product of Elelet Digital Pte. Ltd., Singapore</p>
+  <p class="f2">© 2026 Elelet Digital Pte. Ltd. All rights reserved.</p>
+</footer>
 <script>
 /* ---------- Data (original placeholder content — dummy, not sourced from any real exam) ---------- */
 const SUBJECT_META = {
