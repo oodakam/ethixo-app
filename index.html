@@ -628,22 +628,25 @@ let __subjectChart = null;
 function drawDashboardCharts(){
   const canvas = document.getElementById('subjectBarChart');
   if(!canvas || !window.Chart) return;
-  const en = computeMastery(state.level, "EN").pct;
-  const sci = computeMastery(state.level, "SCI").pct;
-  const ss = computeMastery(state.level, "SS").pct;
-  if(__subjectChart){ __subjectChart.destroy(); }
-  __subjectChart = new Chart(canvas, {
-    type: "bar",
-    data: { labels: ["English","Science","Social Science"],
-      datasets: [{ data: [en, sci, ss], backgroundColor: "#00A86B", borderRadius: 4, barThickness: 22 }] },
-    options: {
-      indexAxis: "y", responsive: true, maintainAspectRatio: false,
-      scales: {
-        x: { min:0, max:100, grid:{color:"#e8e8e8"}, ticks:{color:"#5E6D66", font:{size:11}} },
-        y: { grid:{display:false}, ticks:{color:"#182420", font:{size:12.5, family:"Montserrat"}} }
-      },
-      plugins: { legend:{display:false}, tooltip:{enabled:true} }
-    }
+  requestAnimationFrame(function(){
+    const en = computeMastery(state.level, "EN").pct;
+    const sci = computeMastery(state.level, "SCI").pct;
+    const ss = computeMastery(state.level, "SS").pct;
+    if(__subjectChart){ __subjectChart.destroy(); }
+    __subjectChart = new Chart(canvas, {
+      type: "bar",
+      data: { labels: ["English","Science","Social Science"],
+        datasets: [{ data: [en, sci, ss], backgroundColor: "#00A86B", borderRadius: 4, barThickness: 22 }] },
+      options: {
+        indexAxis: "y", responsive: true, maintainAspectRatio: false,
+        layout: { padding: { left: 4 } },
+        scales: {
+          x: { min:0, max:100, grid:{color:"#e8e8e8"}, ticks:{color:"#5E6D66", font:{size:11}} },
+          y: { grid:{display:false}, ticks:{color:"#182420", font:{size:12.5}} }
+        },
+        plugins: { legend:{display:false}, tooltip:{enabled:true} }
+      }
+    });
   });
 }
 
