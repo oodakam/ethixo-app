@@ -71,6 +71,7 @@
   .qmeta{color:var(--muted);font-size:11.5px;margin-top:2px;}
   .status{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;}
   .status.done{background:var(--brand-light);color:var(--brand-deep);}
+  .status.almost{background:#E3EEFB;color:#1D5A9E;}
   .status.review{background:var(--amber-bg);color:var(--amber);}
   .status.none{background:#eee;color:#888;}
   textarea{width:100%;border:1.5px solid var(--border);border-radius:12px;padding:14px;font-family:'Montserrat',sans-serif;font-size:14.5px;resize:vertical;min-height:130px;}
@@ -112,6 +113,27 @@
   .site-footer{max-width:920px;margin:0 auto;padding:0 20px 30px;text-align:center;flex-shrink:0;width:100%;box-sizing:border-box;}
   .site-footer .f1{font-size:12px;font-weight:500;color:var(--muted);margin:0;}
   .site-footer .f2{font-size:9.5px;color:#7c847e;margin:4px 0 0;}
+  .profile-chip{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:20px;padding:3px 12px 3px 3px;}
+  .profile-chip svg{flex:none;border-radius:50%;}
+  .profile-chip .pname{font-size:12px;font-weight:700;color:var(--ink);line-height:1.25;}
+  .profile-chip .plast{font-size:9.5px;color:var(--muted);line-height:1.25;}
+  .dash-hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:6px;}
+  .dash-hero svg{flex:none;border-radius:18px;}
+  .dash-hero .pname2{font-size:20px;font-weight:800;color:var(--ink);}
+  .dash-hero .plast2{font-size:13px;color:var(--muted);margin-top:2px;}
+  .statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0;}
+  @media(max-width:640px){.statgrid{grid-template-columns:repeat(2,1fr);}}
+  .statcard{background:var(--brand-light);border:1px solid var(--brand-light-b);border-radius:12px;padding:14px 8px;text-align:center;}
+  .statcard .sval{font-size:19px;font-weight:800;color:var(--brand-deep);}
+  .statcard .slabel{font-size:11px;color:var(--muted);margin-top:3px;}
+  .overallcard{background:var(--brand-light);border:1px solid var(--brand-light-b);border-radius:16px;padding:22px;text-align:center;margin-bottom:22px;}
+  .overallcard .qmeta{font-size:13px;}
+  .overallcard .oscore{font-size:42px;font-weight:800;color:var(--brand-deep);line-height:1.1;}
+  .masterycard{border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:12px;}
+  .masterycard .mtitle{display:flex;justify-content:space-between;align-items:center;font-weight:700;color:var(--ink);font-size:14.5px;margin-bottom:9px;}
+  .masterycard .mscore{color:var(--brand-deep);font-weight:800;}
+  .mbar{height:10px;border-radius:6px;background:#eee;overflow:hidden;}
+  .mbar-fill{height:100%;background:linear-gradient(90deg,var(--brand),var(--brand-dark));border-radius:6px;}
   @media print{
     .noprint{display:none!important;}
     body{background:#fff;}
@@ -484,6 +506,115 @@ function attemptScore(a){ return typeof a.score === "number" ? a.score : Math.ro
 
 async function loadVault(){ state.vault = (await sGet("vault")) || []; }
 
+/* ---------- Wenbo Lee persona: avatar, last-active, onboarding, last lesson ---------- */
+function wenboAvatar(size){
+  size = size||40;
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 100 100">'+
+    '<rect width="100" height="100" rx="20" fill="#E3F5EC"/>'+
+    '<path d="M18 100 L18 80 Q50 68 82 80 L82 100 Z" fill="#00A86B"/>'+
+    '<path d="M42 79 L50 89 L58 79" fill="none" stroke="#046B4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'+
+    '<rect x="43" y="63" width="14" height="16" fill="#F0BE8E"/>'+
+    '<circle cx="50" cy="44" r="27" fill="#F5CA96"/>'+
+    '<path d="M22 41 Q22 14 50 14 Q78 14 78 41 Q78 27 64 26 Q57 33 50 26 Q43 33 36 26 Q22 27 22 41Z" fill="#241a10"/>'+
+    '<circle cx="40" cy="45" r="3.2" fill="#241a10"/>'+
+    '<circle cx="60" cy="45" r="3.2" fill="#241a10"/>'+
+    '<path d="M38 55 Q50 66 62 55" stroke="#8a4b1f" stroke-width="3" fill="none" stroke-linecap="round"/>'+
+    '<circle cx="32" cy="52" r="4.5" fill="#F4A98C" opacity="0.45"/>'+
+    '<circle cx="68" cy="52" r="4.5" fill="#F4A98C" opacity="0.45"/>'+
+  '</svg>';
+}
+function formatLastActive(ts){
+  if(!ts) return "First visit";
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff/60000);
+  if(mins < 1) return "Just now";
+  if(mins < 60) return mins+" min ago";
+  const hrs = Math.floor(mins/60);
+  if(hrs < 24) return hrs+"h ago";
+  const days = Math.floor(hrs/24);
+  if(days < 7) return days+"d ago";
+  return new Date(ts).toLocaleDateString();
+}
+function isOnboarded(){ return !!sGet("chosenLevel"); }
+function markOnboarded(level){ sSet("chosenLevel", level); }
+function saveLastLesson(level, subjectKey, lessonId){ sSet("lastLesson", {level:level, subjectKey:subjectKey, lessonId:lessonId}); }
+
+/* ---------- Time tracking (this browser/device only) ---------- */
+function todayKey(){ return new Date().toISOString().slice(0,10); }
+function addTimeSpent(seconds){
+  if(seconds<=0) return;
+  const log = sGet("timelog") || {};
+  const k = todayKey();
+  log[k] = (log[k]||0) + seconds;
+  sSet("timelog", log);
+}
+function getTimeSpent(period){
+  const log = sGet("timelog") || {};
+  const now = new Date();
+  let total = 0;
+  Object.keys(log).forEach(function(dateStr){
+    const secs = log[dateStr];
+    const d = new Date(dateStr+"T00:00:00");
+    if(period==="today"){ if(dateStr===todayKey()) total+=secs; }
+    else if(period==="week"){ const diffDays=Math.floor((now-d)/86400000); if(diffDays>=0 && diffDays<7) total+=secs; }
+    else if(period==="month"){ if(d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth()) total+=secs; }
+    else if(period==="year"){ if(d.getFullYear()===now.getFullYear()) total+=secs; }
+  });
+  return total;
+}
+function formatDuration(seconds){
+  seconds = Math.round(seconds||0);
+  const h = Math.floor(seconds/3600), m = Math.floor((seconds%3600)/60);
+  if(h>0) return h+"h "+m+"m";
+  if(m>0) return m+"m";
+  return "<1m";
+}
+let __lastTick = Date.now();
+function startHeartbeat(){
+  __lastTick = Date.now();
+  setInterval(function(){
+    if(document.visibilityState === "visible"){
+      const now = Date.now();
+      addTimeSpent(Math.round((now-__lastTick)/1000));
+      __lastTick = now;
+    } else { __lastTick = Date.now(); }
+  }, 15000);
+  document.addEventListener("visibilitychange", function(){ __lastTick = Date.now(); });
+  window.addEventListener("beforeunload", function(){ addTimeSpent(Math.round((Date.now()-__lastTick)/1000)); });
+}
+
+/* ---------- Mastery computation (best-score based, independent of ScholarVault save status) ---------- */
+function computeMastery(level, subjectKey){
+  const subj = LEVELS[level][subjectKey];
+  let totalMarks=0, earnedMarks=0, attemptedCount=0, totalCount=0;
+  subj.chapters.forEach(function(ch){
+    if(ch.locked) return;
+    ch.lessons.forEach(function(l){
+      l.questions.forEach(function(q, idx){
+        totalCount++; totalMarks += q.m;
+        const key = "attempts:"+level+":"+subjectKey+":"+l.id+":"+idx;
+        const attempts = sGet(key) || [];
+        if(attempts.length){
+          attemptedCount++;
+          let best = 0;
+          attempts.forEach(function(a){ const s=attemptScore(a); if(s>best) best=s; });
+          earnedMarks += Math.min(best, q.m);
+        }
+      });
+    });
+  });
+  const pct = totalMarks>0 ? Math.round((earnedMarks/totalMarks)*100) : 0;
+  return { pct: pct, earnedMarks: earnedMarks, totalMarks: totalMarks, attemptedCount: attemptedCount, totalCount: totalCount };
+}
+function computeOverallMastery(level){
+  let totalMarks=0, earnedMarks=0;
+  ["EN","SCI","SS"].forEach(function(k){
+    const m = computeMastery(level, k);
+    totalMarks += m.totalMarks; earnedMarks += m.earnedMarks;
+  });
+  return totalMarks>0 ? Math.round((earnedMarks/totalMarks)*100) : 0;
+}
+
 /* ---------- AI calls — go through OUR OWN secure backend, not directly to Anthropic ---------- */
 async function getAIFeedback(question, marks, answer, modelAnswer){
   const res = await fetch("/api/feedback", {
@@ -513,6 +644,7 @@ function stateSnapshot(){
 }
 function goto(view, extra){
   state.view = view; Object.assign(state, extra||{}); state.error = null;
+  if(view === "qbank" && state.lessonId){ saveLastLesson(state.level, state.subjectKey, state.lessonId); }
   history.pushState(stateSnapshot(), "", "#"+view);
   render();
 }
@@ -545,6 +677,7 @@ async function render(){
   else if(state.view==="vault") html = viewVault();
   else if(state.view==="printview") html = viewPrint();
   else if(state.view==="plans") html = viewPlans();
+  else if(state.view==="dashboard") html = viewDashboard();
 
   host.innerHTML = html;
   attachHandlers();
@@ -552,10 +685,14 @@ async function render(){
 }
 
 function topbar(){
+  const onboarded = isOnboarded();
   return '<div class="topbar">'+
-    '<div class="logo" onclick="goto(\'entry\')">Ethixo</div>'+
+    '<div class="logo" onclick="goto(\''+(onboarded?'dashboard':'entry')+'\')">Ethixo</div>'+
     '<div class="topbtns">'+
-      '<span class="badge">MVP · test build</span>'+
+      '<div class="profile-chip">'+wenboAvatar(30)+
+        '<div><div class="pname">Wenbo Lee</div><div class="plast">'+(state.lastActiveText||"Just now")+'</div></div>'+
+      '</div>'+
+      (onboarded? '<button class="vault-link" onclick="goto(\'dashboard\')">Dashboard</button>':"")+
       '<button class="vault-link" onclick="goto(\'plans\')">Plans</button>'+
       '<button class="vault-link" onclick="goto(\'vault\')">ScholarVault</button>'+
     '</div></div>';
@@ -571,24 +708,33 @@ function viewEntry(){
     '</svg>'+
     '<h1 class="title">Learn to answer with Clarity</h1>'+
     '<p class="sub">Ethixo doesn\'t hand you the answer — it\'ll sharpen yours until it earns full marks.</p>'+
-    '<button class="btn btn-primary" onclick="goto(\'level\')">Continue as Demo Student →</button>'+
+    '<button class="btn btn-primary" onclick="goto(\'level\')">Continue as Wenbo Lee →</button>'+
     '<div class="disabledline">Google / Apple / School ID sign-in — wired up in a later phase</div>'+
   '</div>';
 }
 
+const P5_ENABLED = false; // toggle back to true when opening the P5 option for real students
+
 /* ---- Level ---- */
 function viewLevel(){
+  const p5Choice = P5_ENABLED
+    ? '<div class="choice '+(state.level==="P5"?"selected":"")+'" onclick="state.level=\'P5\';render()"><span class="emoji">5️⃣</span><h3>Primary 5</h3><p>Upper Primary</p></div>'
+    : '<div class="choice" style="opacity:.5;cursor:not-allowed;"><span class="tag">Coming soon</span><span class="emoji">5️⃣</span><h3>Primary 5</h3><p>Upper Primary</p></div>';
   return '<div class="card">'+
     '<h1 class="title center">Select your level</h1>'+
     '<p class="sub center">This helps personalise your practice</p>'+
     '<div class="grid cols2">'+
-      '<div class="choice '+(state.level==='P5'?'selected':'')+'" onclick="state.level=\'P5\';render()"><span class="emoji">5️⃣</span><h3>Primary 5</h3><p>Upper Primary</p></div>'+
+      p5Choice+
       '<div class="choice '+(state.level==='P6'?'selected':'')+'" onclick="state.level=\'P6\';render()"><span class="emoji">6️⃣</span><h3>Primary 6</h3><p>Upper Primary (PSLE Year)</p></div>'+
     '</div>'+
     '<div class="row end" style="margin-top:22px;">'+
-      '<button class="btn btn-primary" '+(!state.level?'disabled':'')+' onclick="goto(\'subject\')">Continue</button>'+
+      '<button class="btn btn-primary" '+(!state.level?'disabled':'')+' onclick="chooseLevel()">Continue</button>'+
     '</div>'+
   '</div>';
+}
+function chooseLevel(){
+  markOnboarded(state.level);
+  goto("subject");
 }
 
 /* ---- Subject ---- */
@@ -630,13 +776,18 @@ async function viewQBank(){
   const lesson = findLesson();
   const rows = await Promise.all(lesson.questions.map(async (q,idx)=>{
     const qObj = { id:String(idx), level:state.level, subjectKey:state.subjectKey, lessonId:lesson.id, t:q.t, m:q.m };
-    const attempts = (await sGet(qKey(qObj))) || [];
+    const key = qKey(qObj);
+    const attempts = (await sGet(key)) || [];
+    const savedInVault = state.vault.some(v=>v.qid===key);
     let status = "none", label="Not Attempted";
     if(attempts.length){
-      const last = attempts[attempts.length-1];
-      const frac = (attemptScore(last) / q.m);
-      if(frac >= 0.5){ status="done"; label="Completed · "+attempts.length+" attempt"+(attempts.length>1?"s":""); }
-      else { status="review"; label="Needs Review · "+attempts.length+" attempt"+(attempts.length>1?"s":""); }
+      let best = 0;
+      attempts.forEach(a=>{ const s=attemptScore(a); if(s>best) best=s; });
+      const pct = best / q.m;
+      const attemptsLabel = attempts.length+" attempt"+(attempts.length>1?"s":"");
+      if(pct >= 1 || savedInVault){ status="done"; label="Completed · "+attemptsLabel; }
+      else if(pct >= 0.75){ status="almost"; label="Almost There · "+attemptsLabel; }
+      else { status="review"; label="Needs Review · "+attemptsLabel; }
     }
     return '<div class="qrow" onclick="selectBankQuestion('+idx+')">'+
       '<div class="qnum">'+(idx+1)+'</div>'+
@@ -751,6 +902,10 @@ async function submitAnswer(){
 /* ---- Feedback ---- */
 function viewFeedback(){
   const q = state.currentQuestion, fb = state.feedback;
+  const pct = fb.score / q.m;
+  const saveBtn = (pct >= 0.75)
+    ? '<button class="btn btn-outline" onclick="addToVault()">⭐ Add to ScholarVault</button>'
+    : '<span class="qmeta" style="align-self:center;">Score 75%+ to save to ScholarVault</span>';
   return '<div class="crumb"><b>'+LEVEL_LABEL[q.level]+'</b> › <b>'+SUBJECT_META[q.subjectKey].name+'</b> › <b>'+q.lessonTitle+'</b></div>'+
   '<div class="card">'+
     '<h1 class="title">Your Performance Feedback</h1>'+
@@ -771,7 +926,7 @@ function viewFeedback(){
         '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
       '</div>'+
       '<div class="row">'+
-        '<button class="btn btn-outline" onclick="addToVault()">⭐ Add to ScholarVault</button>'+
+        saveBtn+
         '<button class="btn btn-primary" onclick="goto(\'improve\')">Retry Question</button>'+
       '</div>'+
     '</div>'+
@@ -787,6 +942,12 @@ function drawGaugeIfPresent(){
 }
 async function addToVault(){
   const q = state.currentQuestion, fb = state.feedback;
+  const pct = fb.score / q.m;
+  if(pct < 0.75){ toast("Score 75%+ needed to save to ScholarVault"); return; }
+  if(pct < 0.90){
+    const ok = confirm("You're doing well! You could try to improve this further before saving.\n\nSave this as your final answer anyway?");
+    if(!ok) return;
+  }
   await loadVault();
   const item = { qid:qKey(q), level:q.level, subjectKey:q.subjectKey, lessonTitle:q.lessonTitle, t:q.t, m:q.m, answer:state.answerDraft, score:fb.score, savedAt:Date.now() };
   state.vault = state.vault.filter(v=>v.qid!==item.qid);
@@ -933,15 +1094,67 @@ function viewPlans(){
   '</div>';
 }
 
+/* ---- Dashboard ---- */
+function viewDashboard(){
+  const overall = computeOverallMastery(state.level);
+  const subjects = ["EN","SCI","SS"].map(function(k){
+    const m = computeMastery(state.level, k);
+    const meta = SUBJECT_META[k];
+    return '<div class="masterycard">'+
+      '<div class="mtitle"><span>'+meta.emoji+' '+meta.name+'</span><span class="mscore">'+m.pct+'/100</span></div>'+
+      '<div class="mbar"><div class="mbar-fill" style="width:'+m.pct+'%"></div></div>'+
+      '<div class="qmeta" style="margin-top:6px;">'+m.attemptedCount+' of '+m.totalCount+' questions attempted</div>'+
+    '</div>';
+  }).join("");
+
+  const todaySec = getTimeSpent("today"), weekSec = getTimeSpent("week"), monthSec = getTimeSpent("month"), yearSec = getTimeSpent("year");
+
+  const last = sGet("lastLesson");
+  const continueBtn = (last && last.level===state.level)
+    ? '<button class="btn btn-primary" onclick="goto(\'qbank\',{level:\''+last.level+'\',subjectKey:\''+last.subjectKey+'\',lessonId:\''+last.lessonId+'\'})">Continue Practising →</button>'
+    : '<button class="btn btn-primary" onclick="goto(\'subject\')">Start Practising →</button>';
+
+  return '<div class="card">'+
+    '<div class="dash-hero">'+wenboAvatar(72)+
+      '<div><div class="pname2">Wenbo Lee</div><div class="plast2">'+LEVEL_LABEL[state.level]+' · Last active: '+state.lastActiveText+'</div></div>'+
+    '</div>'+
+    '<div class="statgrid">'+
+      '<div class="statcard"><div class="sval">'+formatDuration(todaySec)+'</div><div class="slabel">Today</div></div>'+
+      '<div class="statcard"><div class="sval">'+formatDuration(weekSec)+'</div><div class="slabel">This Week</div></div>'+
+      '<div class="statcard"><div class="sval">'+formatDuration(monthSec)+'</div><div class="slabel">This Month</div></div>'+
+      '<div class="statcard"><div class="sval">'+formatDuration(yearSec)+'</div><div class="slabel">This Year</div></div>'+
+    '</div>'+
+    '<div class="overallcard"><div class="qmeta">Overall Mastery</div><div class="oscore">'+overall+'/100</div></div>'+
+    '<h3 style="margin:6px 0 12px;color:var(--ink);">By Subject</h3>'+
+    subjects+
+    '<div class="row between" style="margin-top:20px;">'+
+      '<button class="btn btn-ghost" onclick="goto(\'subject\')">All Subjects</button>'+
+      continueBtn+
+    '</div>'+
+  '</div>';
+}
+
 /* ---- misc ---- */
 function attachHandlers(){}
 window.goto = goto; window.selectBankQuestion = selectBankQuestion; window.startCustom = startCustom;
 window.submitAnswer = submitAnswer; window.addToVault = addToVault; window.submitImprove = submitImprove;
-window.toggleVaultSel = toggleVaultSel; window.downloadPDF = downloadPDF; window.state = state;
+window.toggleVaultSel = toggleVaultSel; window.downloadPDF = downloadPDF; window.chooseLevel = chooseLevel; window.state = state;
 
 (async function init(){
   await loadVault();
-  history.replaceState(stateSnapshot(), "", "#entry");
+
+  const prevActive = sGet("lastActive");
+  state.lastActiveText = formatLastActive(prevActive);
+  sSet("lastActive", Date.now());
+  startHeartbeat();
+
+  const savedLevel = sGet("chosenLevel");
+  if(savedLevel){
+    state.level = savedLevel;
+    state.view = "dashboard";
+  }
+
+  history.replaceState(stateSnapshot(), "", "#"+state.view);
   render();
 })();
 </script>
