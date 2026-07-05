@@ -1153,12 +1153,14 @@ function viewDashboard(){
     '<div class="overallcard">'+
       '<div class="qmeta" style="margin-bottom:10px;">Overall Mastery</div>'+
       masteryMeterSVG(130, overall)+
+      '<div class="row" style="margin-top:18px;justify-content:center;">'+
+        '<button class="btn btn-ghost" onclick="goto(\'subject\')">All Subjects</button>'+
+        continueBtn+
+      '</div>'+
     '</div>'+
     '<h3 style="margin:6px 0 12px;color:var(--ink);">By Subject</h3>'+
-    '<div style="height:170px;position:relative;margin-bottom:20px;"><canvas id="subjectBarChart" role="img" aria-label="Bar chart comparing mastery percentage across English, Science, and Social Science"></canvas></div>'+
-    '<div class="row between">'+
-      '<button class="btn btn-ghost" onclick="goto(\'subject\')">All Subjects</button>'+
-      continueBtn+
+    '<div style="height:170px;position:relative;">'+
+      '<canvas id="subjectBarChart" role="img" aria-label="Bar chart comparing mastery percentage across English, Science, and Social Science"></canvas>'+
     '</div>'+
   '</div>';
 }
