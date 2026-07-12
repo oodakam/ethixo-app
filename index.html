@@ -532,6 +532,33 @@ function formatLastActive(ts){
 }
 function isOnboarded(){ return !!sGet("chosenLevel"); }
 function markOnboarded(level){ sSet("chosenLevel", level); }
+function teacherAvatar(size){
+  size = size||40;
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 100 100">'+
+    '<rect width="100" height="100" rx="20" fill="#E3F5EC"/>'+
+    '<path d="M16 100 L16 82 Q50 70 84 82 L84 100 Z" fill="#00A86B"/>'+
+    '<path d="M40 80 Q50 86 60 80" fill="none" stroke="#046B4A" stroke-width="3" stroke-linecap="round"/>'+
+    '<rect x="43" y="63" width="14" height="16" fill="#F0BE8E"/>'+
+    '<circle cx="50" cy="43" r="26" fill="#F5CA96"/>'+
+    '<path d="M22 46 Q20 14 50 13 Q80 14 78 46 Q78 60 74 66 Q76 46 68 38 Q60 46 50 34 Q40 46 32 38 Q24 46 26 66 Q22 60 22 46Z" fill="#2b1c12"/>'+
+    '<circle cx="41" cy="44" r="3" fill="#241a10"/>'+
+    '<circle cx="59" cy="44" r="3" fill="#241a10"/>'+
+    '<path d="M39 54 Q50 63 61 54" stroke="#8a4b1f" stroke-width="3" fill="none" stroke-linecap="round"/>'+
+    '<circle cx="33" cy="51" r="4.5" fill="#F4A98C" opacity="0.4"/>'+
+    '<circle cx="67" cy="51" r="4.5" fill="#F4A98C" opacity="0.4"/>'+
+  '</svg>';
+}
+const TEACHER_ROSTER = [
+  {name:"Aisyah Rahman", time:145, mastery:78},
+  {name:"Marcus Tan", time:62, mastery:51},
+  {name:"Priya Nair", time:210, mastery:88},
+  {name:"Jayden Ong", time:30, mastery:22},
+  {name:"Nur Fatimah", time:118, mastery:69},
+  {name:"Ryan Koh", time:95, mastery:60},
+  {name:"Divya Suresh", time:175, mastery:82},
+  {name:"Ethan Goh", time:40, mastery:35},
+  {name:"Hafiz Ismail", time:88, mastery:55},
+];
 function saveLastLesson(level, subjectKey, lessonId){ sSet("lastLesson", {level:level, subjectKey:subjectKey, lessonId:lessonId}); }
 
 /* ---------- Time tracking (this browser/device only) ---------- */
@@ -680,7 +707,7 @@ function stateSnapshot(){
 function goto(view, extra){
   state.view = view; Object.assign(state, extra||{}); state.error = null;
   if(view === "qbank" && state.lessonId){ saveLastLesson(state.level, state.subjectKey, state.lessonId); }
-  history.pushState(stateSnapshot(), "", "#"+view);
+  try{ history.pushState(stateSnapshot(), "", "#"+view); }catch(e){ /* history API unavailable in this context (e.g. sandboxed preview) — continue without it */ }
   render();
 }
 window.addEventListener("popstate", (e)=>{
@@ -713,6 +740,7 @@ async function render(){
   else if(state.view==="printview") html = viewPrint();
   else if(state.view==="plans") html = viewPlans();
   else if(state.view==="dashboard") html = viewDashboard();
+  else if(state.view==="teacherDashboard") html = viewTeacherDashboard();
 
   host.innerHTML = html;
   attachHandlers();
@@ -721,20 +749,32 @@ async function render(){
 }
 
 function topbar(){
+  const persona = sGet("activePersona");
   const onboarded = isOnboarded();
-  return '<div class="topbar">'+
-    '<div class="logo" onclick="goto(\''+(onboarded?'dashboard':'entry')+'\')">Ethixo</div>'+
-    '<div class="topbtns">'+
-      '<div class="profile-chip">'+wenboAvatar(30)+
-        '<div><div class="pname">Wenbo Lee</div><div class="plast">'+(state.lastActiveText||"Just now")+'</div></div>'+
-      '</div>'+
-      (onboarded? '<button class="vault-link" onclick="goto(\'dashboard\')">Dashboard</button>':"")+
+  let homeView = "entry";
+  if(persona === "teacher") homeView = "teacherDashboard";
+  else if(persona === "student" && onboarded) homeView = "dashboard";
+
+  const profileBlock = !persona ? "" : (persona === "teacher"
+    ? '<div class="profile-chip">'+teacherAvatar(30)+'<div><div class="pname">Sharon Lim</div><div class="plast">Teacher</div></div></div>'
+    : '<div class="profile-chip">'+wenboAvatar(30)+'<div><div class="pname">Wenbo Lee</div><div class="plast">'+(state.lastActiveText||"Just now")+'</div></div></div>');
+
+  let switchLink = "";
+  if(persona === "teacher"){ switchLink = '<button class="vault-link" onclick="switchToStudent()">Switch to Student View</button>'; }
+  else if(persona === "student" && onboarded){ switchLink = '<button class="vault-link" onclick="switchToTeacher()">Switch to Teacher View</button>'; }
+
+  const studentBtns = (persona==="student")
+    ? (onboarded? '<button class="vault-link" onclick="goto(\'dashboard\')">Dashboard</button>':"")+
       '<button class="vault-link" onclick="goto(\'plans\')">Plans</button>'+
-      '<button class="vault-link" onclick="goto(\'vault\')">ScholarVault</button>'+
-    '</div></div>';
+      '<button class="vault-link" onclick="goto(\'vault\')">ScholarVault</button>'
+    : "";
+
+  return '<div class="topbar">'+
+    '<div class="logo" onclick="goto(\''+homeView+'\')">Ethixo</div>'+
+    '<div class="topbtns">'+profileBlock+switchLink+studentBtns+'</div></div>';
 }
 
-/* ---- Entry ---- */
+/* ---- Entry (Role Selector) ---- */
 function viewEntry(){
   return '<div class="card center">'+
     '<svg class="heroart" viewBox="0 0 120 120" fill="none">'+
@@ -744,9 +784,21 @@ function viewEntry(){
     '</svg>'+
     '<h1 class="title">Learn to answer with Clarity</h1>'+
     '<p class="sub">Ethixo doesn\'t hand you the answer — it\'ll sharpen yours until it earns full marks.</p>'+
-    '<button class="btn btn-primary" onclick="goto(\'level\')">Continue as Wenbo Lee →</button>'+
-    '<div class="disabledline">Google / Apple / School ID sign-in — wired up in a later phase</div>'+
+    '<p class="qmeta" style="margin:6px 0 14px;">Explore Ethixo as:</p>'+
+    '<div class="grid cols2">'+
+      '<div class="choice" onclick="enterAsStudent()">'+wenboAvatar(56)+'<h3 style="margin-top:10px;">Student</h3><p>Wenbo Lee · Primary 6</p></div>'+
+      '<div class="choice" onclick="enterAsTeacher()">'+teacherAvatar(56)+'<h3 style="margin-top:10px;">Teacher</h3><p>Sharon Lim · Social Science</p></div>'+
+    '</div>'+
+    '<div class="disabledline" style="margin-top:16px;">Google / Apple / School ID sign-in — wired up in a later phase</div>'+
   '</div>';
+}
+function enterAsStudent(){ sSet("activePersona","student"); goto("level"); }
+function enterAsTeacher(){ sSet("activePersona","teacher"); goto("teacherDashboard"); }
+function switchToTeacher(){ sSet("activePersona","teacher"); goto("teacherDashboard"); }
+function switchToStudent(){
+  sSet("activePersona","student");
+  const lvl = sGet("chosenLevel");
+  if(lvl){ state.level = lvl; goto("dashboard"); } else { goto("level"); }
 }
 
 const P5_ENABLED = false; // toggle back to true when opening the P5 option for real students
@@ -769,6 +821,7 @@ function viewLevel(){
   '</div>';
 }
 function chooseLevel(){
+  sSet("activePersona","student");
   markOnboarded(state.level);
   goto("subject");
 }
@@ -1165,27 +1218,73 @@ function viewDashboard(){
   '</div>';
 }
 
+/* ---- Teacher Dashboard ---- */
+function viewTeacherDashboard(){
+  const wenboTimeMin = Math.round(getTimeSpent("week")/60);
+  const wenboMastery = computeOverallMastery(state.level || "P6");
+  const fullRoster = TEACHER_ROSTER.concat([{name:"Wenbo Lee", time:wenboTimeMin, mastery:wenboMastery, live:true}]);
+
+  const avgTime = Math.round(fullRoster.reduce((s,r)=>s+r.time,0)/fullRoster.length);
+  const avgMastery = Math.round(fullRoster.reduce((s,r)=>s+r.mastery,0)/fullRoster.length);
+  const maxTime = Math.max.apply(null, fullRoster.map(r=>r.time));
+  const rows = fullRoster.map(function(s){
+    let badge = '<span class="qmeta">On track</span>';
+    if(s.time === maxTime && s.time > 0){ badge = '<span class="status done">Most Active</span>'; }
+    else if(s.mastery <= avgMastery-20){ badge = '<span class="status review">Below Avg</span>'; }
+    const nameLabel = s.name + (s.live? ' <span class="qmeta">(live)</span>':"");
+    return '<div class="qrow" style="cursor:default;">'+
+      '<div class="qtext">'+nameLabel+'</div>'+
+      '<div class="qmeta" style="min-width:80px;text-align:right;">'+s.time+'m this wk</div>'+
+      '<div class="qmeta" style="min-width:66px;text-align:right;">'+s.mastery+'/100</div>'+
+      '<div style="min-width:100px;text-align:right;">'+badge+'</div>'+
+    '</div>';
+  }).join("");
+
+  return '<div class="card">'+
+    '<div class="dash-hero">'+teacherAvatar(72)+
+      '<div><div class="pname2">Sharon Lim</div><div class="plast2">Teacher · Social Science · P6-A</div></div>'+
+    '</div>'+
+    '<div class="hintbox" style="margin:16px 0;">This is a demo roster — most students shown are fictional. Wenbo Lee\'s row reflects real activity tracked on this device.</div>'+
+    '<div class="statgrid" style="grid-template-columns:repeat(2,1fr);">'+
+      '<div class="statcard"><div class="sval">'+avgTime+'m</div><div class="slabel">Avg. time this week</div></div>'+
+      '<div class="statcard"><div class="sval">'+avgMastery+'/100</div><div class="slabel">Class avg. mastery</div></div>'+
+    '</div>'+
+    '<h3 style="margin:18px 0 12px;color:var(--ink);">Class Roster — P6-A</h3>'+
+    '<div style="border:1px solid var(--border);border-radius:14px;padding:4px 14px;">'+rows+'</div>'+
+  '</div>';
+}
+
 /* ---- misc ---- */
 function attachHandlers(){}
 window.goto = goto; window.selectBankQuestion = selectBankQuestion; window.startCustom = startCustom;
 window.submitAnswer = submitAnswer; window.addToVault = addToVault; window.submitImprove = submitImprove;
 window.toggleVaultSel = toggleVaultSel; window.downloadPDF = downloadPDF; window.chooseLevel = chooseLevel; window.state = state;
+window.enterAsStudent = enterAsStudent; window.enterAsTeacher = enterAsTeacher; window.switchToTeacher = switchToTeacher; window.switchToStudent = switchToStudent;
 
 (async function init(){
-  await loadVault();
+  try{
+    await loadVault();
 
-  const prevActive = sGet("lastActive");
-  state.lastActiveText = formatLastActive(prevActive);
-  sSet("lastActive", Date.now());
-  startHeartbeat();
+    const prevActive = sGet("lastActive");
+    state.lastActiveText = formatLastActive(prevActive);
+    sSet("lastActive", Date.now());
+    try{ startHeartbeat(); }catch(e){ /* time-tracking is non-critical */ }
 
-  const savedLevel = sGet("chosenLevel");
-  if(savedLevel){
-    state.level = savedLevel;
-    state.view = "dashboard";
+    let activePersona = sGet("activePersona");
+    const savedLevel = sGet("chosenLevel");
+    if(!activePersona && savedLevel){ activePersona = "student"; sSet("activePersona","student"); }
+
+    if(activePersona === "teacher"){
+      state.view = "teacherDashboard";
+    } else if(activePersona === "student" && savedLevel){
+      state.level = savedLevel;
+      state.view = "dashboard";
+    }
+
+    try{ history.replaceState(stateSnapshot(), "", "#"+state.view); }catch(e){ /* history API unavailable in this context — continue without it */ }
+  }catch(e){
+    console.error("Ethixo init warning:", e);
   }
-
-  history.replaceState(stateSnapshot(), "", "#"+state.view);
   render();
 })();
 </script>
