@@ -135,7 +135,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-5",
-        max_tokens: 700,
+        max_tokens: 1024, // raised from 700 — Turn 2+ prompts (with conversation history) were
+                           // likely getting cut off mid-JSON, producing "Unterminated string" errors
         system,
         messages: [{ role: "user", content: user }],
       }),
@@ -143,14 +144,34 @@ export default async function handler(req, res) {
 
     if (!apiRes.ok) {
       const errText = await apiRes.text();
+      console.error("Ethixo thinking.js — Anthropic API error:", apiRes.status, errText);
       res.status(apiRes.status).json({ error: "Anthropic API error", detail: errText });
       return;
     }
 
     const data = await apiRes.json();
+    // Log the raw response server-side (visible in Vercel's Function/Runtime Logs) for every
+    // call — cheap, and this is exactly what we need to see if something looks malformed again.
+    console.log("Ethixo thinking.js — raw Anthropic response:", JSON.stringify(data));
+    if (data.stop_reason === "max_tokens") {
+      console.warn("Ethixo thinking.js — response was TRUNCATED (stop_reason: max_tokens). Consider raising max_tokens further if this recurs.");
+    }
+
     const textBlock = (data.content || []).find((b) => b.type === "text");
-    if (!textBlock) {
-      res.status(502).json({ error: "No text in AI response" });
+    const safeFallback = {
+      responseGate: "Sufficient",
+      questionDemand: (req.body && req.body.questionDemand) || [],
+      learningGap: null,
+      noThinkingCycle: false,
+      confidence: "Low",
+      thinkingMove: "TM-07 Reflect",
+      message: "That's an interesting thought! Can you tell me a bit more about how you got to that answer?",
+      resolved: false,
+    };
+
+    if (!textBlock || !textBlock.text) {
+      console.error("Ethixo thinking.js — no usable text block in response; stop_reason:", data.stop_reason);
+      res.status(200).json(safeFallback); // endpoint always returns a valid, usable JSON object
       return;
     }
 
@@ -161,9 +182,17 @@ export default async function handler(req, res) {
       .replace(/```$/, "")
       .trim();
 
-    const parsed = JSON.parse(clean);
-    res.status(200).json(parsed);
+    try {
+      const parsed = JSON.parse(clean);
+      res.status(200).json(parsed);
+    } catch (parseErr) {
+      console.error("Ethixo thinking.js — JSON parse failed:", parseErr.message, "| stop_reason:", data.stop_reason, "| raw text:", textBlock.text);
+      // Never surface a raw parsing error to a student mid-conversation — fall back to a
+      // safe, generic, warm continuation instead, and rely on the server logs above to debug.
+      res.status(200).json(safeFallback);
+    }
   } catch (e) {
+    console.error("Ethixo thinking.js — unexpected error:", e);
     res.status(500).json({ error: e.message });
   }
 }
