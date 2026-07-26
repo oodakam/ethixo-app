@@ -51,15 +51,10 @@ export default async function handler(req, res) {
           "\n"
         : "";
 
-    const questionDemandBlock = needsQuestionDemand
-      ? "This is Turn 1. First, identify the Question Demand — the mental work this question " +
-        "requires. Choose one to three from this fixed list only: Recall, Explain Meaning, Use in " +
-        "Context, Find Evidence, Compare, Cause & Effect, Infer, Predict, Classify, Apply. Return " +
-        "this once as \"questionDemand\"; do not invent new categories."
-      : 'Question Demand for this interaction has already been established as: ' +
-        JSON.stringify(questionDemand) +
-        ". Do not re-derive it — reuse it exactly as given, and echo it back unchanged in your \"questionDemand\" field.";
-
+    // NOTE: the system prompt below is now 100% static/identical on every call (same text
+    // regardless of turn number, question, or student) — this is required for Anthropic's
+    // prompt caching to actually hit. Anything that varies per-call (Question Demand
+    // instructions, marks) has been moved into the per-call `user` message instead.
     const system =
       "You are Ethixo's Thinking Cycle engine for a Singapore Primary school student, working " +
       "through ONE bank question with a confidential model answer. Your job each turn is to " +
@@ -72,7 +67,10 @@ export default async function handler(req, res) {
       "- Insufficient: blank, 'I don't know', a joke, keyboard nonsense, or off-topic — no usable evidence.\n" +
       "Classify interactions, not children: never infer ability, effort, or intelligence from a single response.\n\n" +
 
-      "STEP 2 — QUESTION DEMAND:\n" + questionDemandBlock + "\n\n" +
+      "STEP 2 — QUESTION DEMAND: the user message will tell you either to infer this fresh (Turn 1 " +
+      "only — choose one to three from this fixed list: Recall, Explain Meaning, Use in Context, Find " +
+      "Evidence, Compare, Cause & Effect, Infer, Predict, Classify, Apply — never invent new categories) " +
+      "or to reuse a value already established earlier in this interaction (echo it back unchanged).\n\n" +
 
       "STEP 3 — IF AND ONLY IF Response Gate = Sufficient, diagnose ONE primary Learning Gap from " +
       "this fixed taxonomy only (pick the single closest match; if genuinely nothing fits — e.g. the " +
@@ -107,8 +105,6 @@ export default async function handler(req, res) {
       "own previous intervention): has the student's new response addressed the previously diagnosed " +
       "gap well enough that continuing further would have low pedagogical value? true/false.\n\n" +
 
-      "Marks for this question: " + marks + ".\n\n" +
-
       "Reply with STRICT JSON ONLY, no markdown fences, matching exactly this shape:\n" +
       '{"responseGate": "Sufficient"|"Partial"|"Insufficient", ' +
       '"questionDemand": ["...", "..."], ' +
@@ -119,13 +115,20 @@ export default async function handler(req, res) {
       '"message": "...", ' +
       '"resolved": true|false}';
 
+    const questionDemandInstruction = needsQuestionDemand
+      ? "Question Demand: not yet established — infer it now (Turn 1)."
+      : "Question Demand already established as " + JSON.stringify(questionDemand) + " — reuse it exactly, do not re-derive.";
+
     const user =
       "Question (" + marks + " marks): " + question +
       '\nConfidential model answer (never reveal): """' + modelAnswer + '"""\n' +
+      questionDemandInstruction + "\n" +
       historyBlock +
       '\nStudent\'s current response (Turn ' + turnNumber + '): """' + studentResponse + '"""\n\n' +
       "Work through the pipeline now and return the JSON.";
 
+
+    const callStart = Date.now();
     const apiRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -135,24 +138,33 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-5",
-        max_tokens: 1024, // raised from 700 — Turn 2+ prompts (with conversation history) were
-                           // likely getting cut off mid-JSON, producing "Unterminated string" errors
+        max_tokens: 1536, // raised again (700 -> 1024 -> 1536) — the fallback still fired after the
+                           // first increase, per the latest screenshots. The new usage/stop_reason
+                           // logging below will confirm from real data whether truncation is still
+                           // happening, rather than guessing further.
+        cache_control: { type: "ephemeral" }, // system is now fully static across turns/requests —
+                           // this caches it so Turn 2/3 (and other students' calls) skip reprocessing
+                           // the whole taxonomy every time, which should meaningfully cut latency.
         system,
         messages: [{ role: "user", content: user }],
       }),
     });
+    const callMs = Date.now() - callStart;
 
     if (!apiRes.ok) {
       const errText = await apiRes.text();
-      console.error("Ethixo thinking.js — Anthropic API error:", apiRes.status, errText);
+      console.error("Ethixo thinking.js — Anthropic API error:", apiRes.status, errText, "| call took", callMs, "ms");
       res.status(apiRes.status).json({ error: "Anthropic API error", detail: errText });
       return;
     }
 
     const data = await apiRes.json();
-    // Log the raw response server-side (visible in Vercel's Function/Runtime Logs) for every
-    // call — cheap, and this is exactly what we need to see if something looks malformed again.
-    console.log("Ethixo thinking.js — raw Anthropic response:", JSON.stringify(data));
+    // Log timing + cache stats server-side (Vercel Runtime Logs) on every call — this is the
+    // "measure, don't guess" data point: cache_read_input_tokens > 0 means caching hit.
+    console.log(
+      "Ethixo thinking.js — turn", turnNumber, "| call took", callMs, "ms | usage:",
+      JSON.stringify(data.usage), "| stop_reason:", data.stop_reason
+    );
     if (data.stop_reason === "max_tokens") {
       console.warn("Ethixo thinking.js — response was TRUNCATED (stop_reason: max_tokens). Consider raising max_tokens further if this recurs.");
     }
