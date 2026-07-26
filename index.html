@@ -1052,7 +1052,7 @@ function handleThinkingResult(studentResponse, result){
     // without a Learning Gap diagnosis (Phase 1 assumption: Insufficient follows the same
     // one-chance rule as Partial — flagged in the Milestone 1 report).
     if(state.usedClarification){
-      goto("rewrite", {rewritePrefill:""});
+      goto("rewrite", {rewritePrefill: studentResponse});
       return;
     }
     state.usedClarification = true;
@@ -1073,7 +1073,10 @@ function handleThinkingResult(studentResponse, result){
   state.thinkingHistory.push({speaker:"ethixo", text: result.message});
   const shouldExit = result.resolved === true || state.thinkingTurn >= 3;
   if(shouldExit){
-    goto("rewrite", {rewritePrefill:""});
+    // Prefill with the student's latest reply from the cycle — they just worked through this
+    // out loud, so continuity here matters (an empty box felt like being sent back to the
+    // start, per real testing feedback). They can still edit/expand freely before submitting.
+    goto("rewrite", {rewritePrefill: studentResponse});
   } else {
     state.thinkingTurn += 1;
     goto("thinking");
