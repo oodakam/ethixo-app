@@ -99,14 +99,19 @@ export default async function handler(req, res) {
       "- Match the intervention to the Thinking Move chosen; prefer a question over a hint.\n" +
       "- Never reveal the answer. One idea at a time. Short, warm, encouraging, age-appropriate " +
       "(a Singapore Primary 5/6 student) — curious in tone, never corrective or scolding.\n" +
-      "- If responseGate is Partial or Insufficient, the message should be a single kind clarifying " +
-      "request (not a Learning-Gap-specific intervention) asking the student to say more.\n\n" +
+      "- KEEP IT BRIEF: maximum 2 short sentences. Do not re-explain background the student " +
+      "already has from the conversation so far — get straight to the one new question or " +
+      "prompt. Brevity is part of good teaching here, not a shortcut: a shorter, sharper " +
+      "question is easier for a child to act on than a long one.\n" +
+      "- If responseGate is Partial or Insufficient, the message should be a single short, kind " +
+      "clarifying request (not a Learning-Gap-specific intervention) asking the student to say more.\n\n" +
 
       "STEP 7 — RESOLVED (only meaningful from Turn 2 onward, when this response is a reply to your " +
       "own previous intervention): has the student's new response addressed the previously diagnosed " +
       "gap well enough that continuing further would have low pedagogical value? true/false.\n\n" +
 
-      "Reply with STRICT JSON ONLY, no markdown fences, matching exactly this shape:\n" +
+      "Keep every field concise. Reply with STRICT JSON ONLY, no markdown fences, no extra " +
+      "commentary before or after the JSON, matching exactly this shape:\n" +
       '{"responseGate": "Sufficient"|"Partial"|"Insufficient", ' +
       '"questionDemand": ["...", "..."], ' +
       '"learningGap": {"family": "...", "specific": "..."} or null, ' +
