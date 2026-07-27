@@ -13,6 +13,7 @@
 // inference branch below with a metadata lookup; nothing else in this file changes.
 
 export default async function handler(req, res) {
+  const requestStart = Date.now();
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -161,8 +162,11 @@ export default async function handler(req, res) {
     const data = await apiRes.json();
     // Log timing + cache stats server-side (Vercel Runtime Logs) on every call — this is the
     // "measure, don't guess" data point: cache_read_input_tokens > 0 means caching hit.
+    // totalMs = full function time (includes any Vercel cold start + JSON parsing overhead);
+    // callMs = just the Anthropic fetch. Comparing the two tells us where time is actually going.
+    const totalMs = Date.now() - requestStart;
     console.log(
-      "Ethixo thinking.js — turn", turnNumber, "| call took", callMs, "ms | usage:",
+      "Ethixo thinking.js — turn", turnNumber, "| anthropic call:", callMs, "ms | total function time:", totalMs, "ms | usage:",
       JSON.stringify(data.usage), "| stop_reason:", data.stop_reason
     );
     if (data.stop_reason === "max_tokens") {
