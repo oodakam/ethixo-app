@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -93,6 +94,12 @@
   .fb-list li{display:flex;gap:8px;padding:6px 0;font-size:14px;line-height:1.4;}
   .fb-list.ok li::before{content:"✓";color:var(--brand-deep);font-weight:800;flex:none;}
   .fb-list.next li::before{content:"↗";color:var(--amber);font-weight:800;flex:none;}
+  .receipt-divider{border:none;border-top:1px dashed var(--brand-light-b);margin:22px 0 0;}
+  .receipt-block{margin-top:16px;background:var(--brand-light);border:1px solid var(--brand-light-b);border-radius:14px;padding:16px 18px;}
+  .receipt-block h4{margin:0 0 8px;font-size:14px;color:var(--brand-deep);display:flex;align-items:center;gap:6px;}
+  .receipt-list{list-style:none;margin:0;padding:0;}
+  .receipt-list li{display:flex;gap:8px;padding:5px 0;font-size:14px;line-height:1.45;color:var(--ink);}
+  .receipt-list li::before{content:"🌱";flex:none;}
   .history{border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:16px;background:#fbfcfb;}
   .hattempt{display:flex;justify-content:space-between;padding:8px 0;border-top:1px dashed var(--border);font-size:13.5px;}
   .hattempt:first-child{border-top:none;}
@@ -497,7 +504,7 @@ const LEVELS = {
 /* ---------- State ---------- */
 let state = { view:"entry", level:null, subjectKey:null, lessonId:null, currentQuestion:null,
   answerDraft:"", feedback:null, loading:false, validating:false, error:null, toast:null, vault:[], selectedVaultIds:[],
-  thinkingTurn:0, thinkingHistory:[], questionDemand:null, usedClarification:false, awaitingFinalAnswer:false };
+  thinkingTurn:0, thinkingHistory:[], thinkingHistoryQid:null, questionDemand:null, usedClarification:false, awaitingFinalAnswer:false };
 
 /* ---------- Storage helpers (browser localStorage — per-device, no account system yet) ---------- */
 function sGet(key){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
@@ -684,11 +691,13 @@ function drawDashboardCharts(){
 }
 
 /* ---------- AI calls — go through OUR OWN secure backend, not directly to Anthropic ---------- */
-async function getAIFeedback(question, marks, answer, modelAnswer){
+async function getAIFeedback(question, marks, answer, modelAnswer, thinkingHistory, priorAttempts){
   const res = await fetch("/api/feedback", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ question, marks, answer, modelAnswer: modelAnswer||null })
+    body: JSON.stringify({ question, marks, answer, modelAnswer: modelAnswer||null,
+      thinkingHistory: (thinkingHistory&&thinkingHistory.length)?thinkingHistory:undefined,
+      priorAttempts: (priorAttempts&&priorAttempts.length)?priorAttempts:undefined })
   });
   const data = await res.json();
   if(!res.ok){ throw new Error(data.error || ("Server error "+res.status)); }
@@ -709,7 +718,7 @@ async function validateCustomQuestion(subjectName, lessonTitle, questionText){
 function stateSnapshot(){
   return { view: state.view, level: state.level, subjectKey: state.subjectKey, lessonId: state.lessonId,
     currentQuestion: state.currentQuestion, answerDraft: state.answerDraft, feedback: state.feedback,
-    thinkingTurn: state.thinkingTurn, thinkingHistory: state.thinkingHistory, questionDemand: state.questionDemand,
+    thinkingTurn: state.thinkingTurn, thinkingHistory: state.thinkingHistory, thinkingHistoryQid: state.thinkingHistoryQid, questionDemand: state.questionDemand,
     usedClarification: state.usedClarification, awaitingFinalAnswer: state.awaitingFinalAnswer };
 }
 function goto(view, extra){
@@ -904,6 +913,8 @@ function selectBankQuestion(idx){
   const q = lesson.questions[idx];
   state.currentQuestion = { id:String(idx), level:state.level, subjectKey:state.subjectKey, lessonId:lesson.id, lessonTitle:lesson.title, t:q.t, m:q.m, a:q.a||null };
   state.answerDraft = "";
+  state.thinkingTurn = 0; state.thinkingHistory = []; state.thinkingHistoryQid = null;
+  state.questionDemand = null; state.usedClarification = false; state.awaitingFinalAnswer = false;
   goto("answer");
 }
 
@@ -945,6 +956,8 @@ async function startCustom(){
     }
     state.currentQuestion = { id:"custom-"+Date.now(), level:state.level, subjectKey:state.subjectKey, lessonId:lesson.id, lessonTitle:lesson.title, t, m, custom:true };
     state.answerDraft = ""; state.customDraft = ""; state.error = null;
+    state.thinkingTurn = 0; state.thinkingHistory = []; state.thinkingHistoryQid = null;
+    state.questionDemand = null; state.usedClarification = false; state.awaitingFinalAnswer = false;
     goto("answer");
   }catch(e){
     state.validating = false;
@@ -989,6 +1002,7 @@ async function submitAnswer(){
   // Bank question -> start the Thinking Cycle (Phase 1, api/thinking.js), Turn 1.
   state.thinkingTurn = 1;
   state.thinkingHistory = [];
+  state.thinkingHistoryQid = qKey(q);
   state.questionDemand = null;
   state.usedClarification = false;
   state.awaitingFinalAnswer = false;
@@ -1006,7 +1020,12 @@ async function submitAnswerDirect(ans){
   state.loading = true; state.error=null; render();
   try{
     const q = state.currentQuestion;
-    const fb = await getAIFeedback(q.t, q.m, ans, q.a);
+    const priorAttempts = (await sGet(qKey(q))) || [];
+    // Only trust state.thinkingHistory as Learning Receipt evidence if it was actually built
+    // for THIS question (guards against a previous question's Thinking Cycle history leaking
+    // in as false evidence — see milestone report).
+    const thinkingEvidence = (state.thinkingHistoryQid === qKey(q)) ? state.thinkingHistory : [];
+    const fb = await getAIFeedback(q.t, q.m, ans, q.a, thinkingEvidence, priorAttempts);
     state.loading=false;
     if(fb.languageError){
       state.error = fb.message || "Please write your answer in English.";
@@ -1014,9 +1033,12 @@ async function submitAnswerDirect(ans){
       return;
     }
     state.feedback = fb;
-    const attempts = (await sGet(qKey(q))) || [];
-    attempts.push({ answer:ans, score:fb.score, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
-    await sSet(qKey(q), attempts);
+    priorAttempts.push({ answer:ans, score:fb.score, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
+    await sSet(qKey(q), priorAttempts);
+    // Thinking Cycle evidence has now been consumed (or was never relevant) — clear it so it
+    // can never be mistaken for evidence belonging to a different question later.
+    state.thinkingHistory = []; state.thinkingHistoryQid = null; state.thinkingTurn = 0;
+    state.usedClarification = false; state.awaitingFinalAnswer = false;
     goto("feedback");
   }catch(e){
     state.loading=false; state.error="Couldn't reach Ethixo's AI coach right now. ("+e.message+")"; render();
@@ -1150,6 +1172,10 @@ function viewFeedback(){
     '</div>'+
     '<div class="fb-block"><h4>✅ Strengths</h4><ul class="fb-list ok">'+fb.strengths.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>'+
     '<div class="fb-block"><h4>↗ Next Steps to Strengthen Your Answer</h4><ul class="fb-list next">'+fb.nextSteps.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>'+
+    ((fb.learningReceipt && fb.learningReceipt.length) ?
+      '<hr class="receipt-divider">'+
+      '<div class="receipt-block"><h4>🌱 Today\'s Learning</h4><ul class="receipt-list">'+fb.learningReceipt.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>'
+      : "")+
     '<div class="row between" style="margin-top:24px;">'+
       '<div class="row">'+
         '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
@@ -1218,7 +1244,8 @@ async function submitImprove(){
   state.loading=true; state.error=null; render();
   try{
     const q = state.currentQuestion;
-    const fb = await getAIFeedback(q.t, q.m, ans, q.a);
+    const priorAttempts = (await sGet(qKey(q))) || [];
+    const fb = await getAIFeedback(q.t, q.m, ans, q.a, [], priorAttempts);
     state.loading=false;
     if(fb.languageError){
       state.error = fb.message || "Please write your answer in English.";
@@ -1226,9 +1253,8 @@ async function submitImprove(){
       return;
     }
     state.feedback = fb; state.answerDraft = ans;
-    const attempts = (await sGet(qKey(q))) || [];
-    attempts.push({ answer:ans, score:fb.score, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
-    await sSet(qKey(q), attempts);
+    priorAttempts.push({ answer:ans, score:fb.score, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
+    await sSet(qKey(q), priorAttempts);
     goto("feedback");
   }catch(e){
     state.loading=false; state.error="Couldn't reach Ethixo's AI coach right now. ("+e.message+")"; render();
