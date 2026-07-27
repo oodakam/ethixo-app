@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { question, marks, answer, modelAnswer } = req.body || {};
+    const { question, marks, answer, modelAnswer, thinkingHistory, priorAttempts } = req.body || {};
     if (!question || !marks || !answer) {
       res.status(400).json({ error: "Missing question, marks, or answer" });
       return;
@@ -38,14 +38,37 @@ export default async function handler(req, res) {
       "- NEVER state, imply, or reveal the correct or full answer, whether from the marking scheme or your own knowledge.\n" +
       "- NEVER rewrite or complete the answer for the student.\n" +
       "- Reply with STRICT JSON ONLY — no markdown fences, no commentary before or after — matching exactly:\n" +
-      '{"score": <single integer 0-' + marks + ', your best single estimate, not a range>, "strengths": ["...", "..."], "nextSteps": ["...", "..."]}\n' +
+      '{"score": <single integer 0-' + marks + ', your best single estimate, not a range>, "strengths": ["...", "..."], "nextSteps": ["...", "..."], "learningReceipt": ["...", "..."]}\n' +
       "- score: ONE single whole number, like a teacher would give — never a range or two numbers.\n" +
       "- strengths: 1-3 short, specific points on what the student did well, referring to their actual answer.\n" +
-      "- nextSteps: 1-3 short guiding prompts (questions or pointers on what KIND of detail/example is missing) that lead the student to improve their own answer, without giving the content away.";
+      "- nextSteps: 1-3 short guiding prompts (questions or pointers on what KIND of detail/example is missing) that lead the student to improve their own answer, without giving the content away.\n" +
+      "- learningReceipt: this is Ethixo's most important field. It is NOT a summary of the answer and must NEVER repeat or rephrase anything already said in strengths or nextSteps.\n" +
+      "  It is 0 to 3 short bullets celebrating genuine LEARNING BEHAVIOUR evidenced in the 'Interaction context' provided below (if any), or, when no such context is given, evidenced only in how the student engaged with THIS single attempt.\n" +
+      "  Only celebrate one or more of these exact qualities, and only when real evidence supports it: Persistence, Curiosity, Discovery, Reflection, Improvement, Careful thinking, Connections made, Misconceptions corrected.\n" +
+      "  Every bullet MUST name the quality and immediately explain, in one short sentence, exactly what the student did to earn it (e.g. \"Great persistence! You stayed with the problem until the meaning became clear.\").\n" +
+      "  NEVER use empty praise such as \"Great job!\", \"Brilliant!\", or \"Smart student!\" without that specific evidence attached.\n" +
+      "  NEVER invent or assume evidence that is not actually present in the context given to you. If nothing genuine qualifies, return an empty array — do not force it.\n" +
+      "  Tone: warm, teacher-like, specific, short, never repetitive. The goal is to help the student notice and enjoy the FEELING of learning itself (discovering, understanding, improving, persevering) so they want to do it again — not to make them chase praise.";
+
+    let interactionContext = "";
+    if (Array.isArray(thinkingHistory) && thinkingHistory.length) {
+      interactionContext += "\n\nInteraction context for learningReceipt ONLY (this is the student's Thinking Cycle conversation BEFORE writing the final answer above — use it to look for real evidence of persistence, curiosity, reflection, or misconceptions being corrected; never quote it in strengths or nextSteps):\n";
+      thinkingHistory.forEach(function (turn) {
+        interactionContext += "- " + (turn.speaker === "ethixo" ? "Ethixo asked" : "Student replied") + ": \"" + String(turn.text || "").slice(0, 300) + "\"\n";
+      });
+    }
+    if (Array.isArray(priorAttempts) && priorAttempts.length) {
+      interactionContext += "\n\nPrevious attempts by this student on this SAME question (for learningReceipt ONLY — only mention Improvement if this attempt's score is genuinely higher than the most recent one below):\n";
+      priorAttempts.slice(-3).forEach(function (a, i) {
+        interactionContext += "- Attempt " + (i + 1) + ": scored " + a.score + "/" + marks + "\n";
+      });
+    }
 
     const user =
       "Question (" + marks + " marks): " + question +
-      '\n\nStudent\'s answer:\n"""' + answer + '"""\n\nAssess this answer now.';
+      '\n\nStudent\'s answer:\n"""' + answer + '"""' +
+      interactionContext +
+      "\n\nAssess this answer now.";
 
     const apiRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -56,7 +79,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-5",
-        max_tokens: 1000,
+        max_tokens: 1200,
         system,
         messages: [{ role: "user", content: user }],
       }),
@@ -83,6 +106,7 @@ export default async function handler(req, res) {
       .trim();
 
     const parsed = JSON.parse(clean);
+    parsed.learningReceipt = Array.isArray(parsed.learningReceipt) ? parsed.learningReceipt.slice(0, 3) : [];
     res.status(200).json(parsed);
   } catch (e) {
     res.status(500).json({ error: e.message });
