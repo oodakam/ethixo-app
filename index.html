@@ -1126,6 +1126,7 @@ function viewRewrite(){
   return '<div class="crumb"><b>'+LEVEL_LABEL[q.level]+'</b> › <b>'+SUBJECT_META[q.subjectKey].name+'</b> › <b>'+q.lessonTitle+'</b></div>'+
   '<div class="card">'+
     '<h1 class="title">Rewrite Your Answer</h1>'+
+    '<p class="sub" style="margin-top:-6px;">Nice thinking! Now use what you just discussed to write your complete, final answer below.</p>'+
     '<p class="qmeta" style="font-size:13px;">'+q.m+' Mark'+(q.m>1?"s":"")+'</p>'+
     '<p style="font-weight:700;color:var(--ink);font-size:16px;">'+q.t+'</p>'+
     '<textarea id="rewriteBox" placeholder="Type your improved answer here…">'+prefill+'</textarea>'+
@@ -1135,7 +1136,7 @@ function viewRewrite(){
         '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
         '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
       '</div>'+
-      '<button class="btn btn-primary" onclick="submitRewrite()">'+(state.loading?"Reviewing…":"Review My Answer")+'</button>'+
+      '<button class="btn btn-primary" onclick="submitRewrite()">'+(state.loading?"Reviewing…":"Submit This Answer")+'</button>'+
     '</div>'+
     (state.loading? '<div class="loading"><div class="spinner"></div>Ethixo is reading your answer…</div>':"")+
   '</div>';
