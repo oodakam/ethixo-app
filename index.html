@@ -497,7 +497,7 @@ const LEVELS = {
 /* ---------- State ---------- */
 let state = { view:"entry", level:null, subjectKey:null, lessonId:null, currentQuestion:null,
   answerDraft:"", feedback:null, loading:false, validating:false, error:null, toast:null, vault:[], selectedVaultIds:[],
-  thinkingTurn:0, thinkingHistory:[], questionDemand:null, usedClarification:false, rewritePrefill:"" };
+  thinkingTurn:0, thinkingHistory:[], questionDemand:null, usedClarification:false };
 
 /* ---------- Storage helpers (browser localStorage — per-device, no account system yet) ---------- */
 function sGet(key){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
@@ -710,7 +710,7 @@ function stateSnapshot(){
   return { view: state.view, level: state.level, subjectKey: state.subjectKey, lessonId: state.lessonId,
     currentQuestion: state.currentQuestion, answerDraft: state.answerDraft, feedback: state.feedback,
     thinkingTurn: state.thinkingTurn, thinkingHistory: state.thinkingHistory, questionDemand: state.questionDemand,
-    usedClarification: state.usedClarification, rewritePrefill: state.rewritePrefill };
+    usedClarification: state.usedClarification };
 }
 function goto(view, extra){
   state.view = view; Object.assign(state, extra||{}); state.error = null;
@@ -750,7 +750,6 @@ async function render(){
   else if(state.view==="dashboard") html = viewDashboard();
   else if(state.view==="teacherDashboard") html = viewTeacherDashboard();
   else if(state.view==="thinking") html = viewThinking();
-  else if(state.view==="rewrite") html = viewRewrite();
 
   host.innerHTML = html;
   attachHandlers();
@@ -992,12 +991,11 @@ async function submitAnswer(){
   state.thinkingHistory = [];
   state.questionDemand = null;
   state.usedClarification = false;
-  state.rewritePrefill = "";
   state.loading = true; render();
   try{
     const result = await callThinkingTurn(ans);
     state.loading = false;
-    handleThinkingResult(ans, result);
+    await handleThinkingResult(ans, result);
   }catch(e){
     state.loading = false; state.error = "Couldn't reach Ethixo's thinking coach right now. ("+e.message+")"; render();
   }
@@ -1042,7 +1040,7 @@ async function callThinkingTurn(studentResponse){
   return data;
 }
 
-function handleThinkingResult(studentResponse, result){
+async function handleThinkingResult(studentResponse, result){
   if(result.questionDemand && result.questionDemand.length){ state.questionDemand = result.questionDemand; }
   state.thinkingHistory.push({speaker:"student", text: studentResponse});
 
@@ -1052,8 +1050,9 @@ function handleThinkingResult(studentResponse, result){
     // without a Learning Gap diagnosis (Phase 1 assumption: Insufficient follows the same
     // one-chance rule as Partial — flagged in the Milestone 1 report).
     if(state.usedClarification){
-      goto("rewrite", {rewritePrefill: studentResponse});
-      return;
+      // Exit straight into the existing grading flow — no separate screen/second submit
+      // (Option A, per real UX feedback: the student already wrote this once).
+      return submitAnswerDirect(studentResponse);
     }
     state.usedClarification = true;
     state.thinkingHistory.push({speaker:"ethixo", text: result.message});
@@ -1064,19 +1063,18 @@ function handleThinkingResult(studentResponse, result){
 
   if(result.noThinkingCycle){
     // Sufficient evidence, but no genuine thinking gap (e.g. a pure factual-recall miss) —
-    // route straight to Rewrite with their original attempt still visible, no forced
-    // Socratic back-and-forth for something that's a knowledge gap, not a thinking gap.
-    goto("rewrite", {rewritePrefill: studentResponse});
-    return;
+    // grade their original attempt directly, no forced Socratic back-and-forth for something
+    // that's a knowledge gap, not a thinking gap.
+    return submitAnswerDirect(studentResponse);
   }
 
   state.thinkingHistory.push({speaker:"ethixo", text: result.message});
   const shouldExit = result.resolved === true || state.thinkingTurn >= 3;
   if(shouldExit){
-    // Prefill with the student's latest reply from the cycle — they just worked through this
-    // out loud, so continuity here matters (an empty box felt like being sent back to the
-    // start, per real testing feedback). They can still edit/expand freely before submitting.
-    goto("rewrite", {rewritePrefill: studentResponse});
+    // The student's latest reply IS their final answer — grade it immediately. If they want
+    // to revise further, the existing "Retry Question" flow on the Feedback screen already
+    // covers that; no extra pre-grading edit screen needed.
+    return submitAnswerDirect(studentResponse);
   } else {
     state.thinkingTurn += 1;
     goto("thinking");
@@ -1114,39 +1112,10 @@ async function submitThinkingReply(){
   try{
     const result = await callThinkingTurn(reply);
     state.loading = false;
-    handleThinkingResult(reply, result);
+    await handleThinkingResult(reply, result);
   }catch(e){
     state.loading = false; state.error = "Couldn't reach Ethixo's thinking coach right now. ("+e.message+")"; render();
   }
-}
-
-function viewRewrite(){
-  const q = state.currentQuestion;
-  const prefill = state.rewritePrefill || "";
-  return '<div class="crumb"><b>'+LEVEL_LABEL[q.level]+'</b> › <b>'+SUBJECT_META[q.subjectKey].name+'</b> › <b>'+q.lessonTitle+'</b></div>'+
-  '<div class="card">'+
-    '<h1 class="title">Rewrite Your Answer</h1>'+
-    '<p class="sub" style="margin-top:-6px;">Nice thinking! Now use what you just discussed to write your complete, final answer below.</p>'+
-    '<p class="qmeta" style="font-size:13px;">'+q.m+' Mark'+(q.m>1?"s":"")+'</p>'+
-    '<p style="font-weight:700;color:var(--ink);font-size:16px;">'+q.t+'</p>'+
-    '<textarea id="rewriteBox" placeholder="Type your improved answer here…">'+prefill+'</textarea>'+
-    (state.error? '<div class="errbox">'+state.error+'</div>':"")+
-    '<div class="row between" style="margin-top:18px;">'+
-      '<div class="row">'+
-        '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
-        '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
-      '</div>'+
-      '<button class="btn btn-primary" onclick="submitRewrite()">'+(state.loading?"Reviewing…":"Submit This Answer")+'</button>'+
-    '</div>'+
-    (state.loading? '<div class="loading"><div class="spinner"></div>Ethixo is reading your answer…</div>':"")+
-  '</div>';
-}
-async function submitRewrite(){
-  const box = document.getElementById("rewriteBox");
-  const ans = box.value.trim();
-  if(!ans){ toast("Write an answer first"); return; }
-  state.answerDraft = ans;
-  return submitAnswerDirect(ans);
 }
 
 /* ---- Feedback ---- */
@@ -1421,7 +1390,7 @@ window.goto = goto; window.selectBankQuestion = selectBankQuestion; window.start
 window.submitAnswer = submitAnswer; window.addToVault = addToVault; window.submitImprove = submitImprove;
 window.toggleVaultSel = toggleVaultSel; window.downloadPDF = downloadPDF; window.chooseLevel = chooseLevel; window.state = state;
 window.enterAsStudent = enterAsStudent; window.enterAsTeacher = enterAsTeacher; window.switchToTeacher = switchToTeacher; window.switchToStudent = switchToStudent;
-window.submitThinkingReply = submitThinkingReply; window.submitRewrite = submitRewrite;
+window.submitThinkingReply = submitThinkingReply;
 
 (async function init(){
   try{
