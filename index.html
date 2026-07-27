@@ -497,7 +497,7 @@ const LEVELS = {
 /* ---------- State ---------- */
 let state = { view:"entry", level:null, subjectKey:null, lessonId:null, currentQuestion:null,
   answerDraft:"", feedback:null, loading:false, validating:false, error:null, toast:null, vault:[], selectedVaultIds:[],
-  thinkingTurn:0, thinkingHistory:[], questionDemand:null, usedClarification:false };
+  thinkingTurn:0, thinkingHistory:[], questionDemand:null, usedClarification:false, awaitingFinalAnswer:false };
 
 /* ---------- Storage helpers (browser localStorage — per-device, no account system yet) ---------- */
 function sGet(key){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
@@ -710,7 +710,7 @@ function stateSnapshot(){
   return { view: state.view, level: state.level, subjectKey: state.subjectKey, lessonId: state.lessonId,
     currentQuestion: state.currentQuestion, answerDraft: state.answerDraft, feedback: state.feedback,
     thinkingTurn: state.thinkingTurn, thinkingHistory: state.thinkingHistory, questionDemand: state.questionDemand,
-    usedClarification: state.usedClarification };
+    usedClarification: state.usedClarification, awaitingFinalAnswer: state.awaitingFinalAnswer };
 }
 function goto(view, extra){
   state.view = view; Object.assign(state, extra||{}); state.error = null;
@@ -991,6 +991,7 @@ async function submitAnswer(){
   state.thinkingHistory = [];
   state.questionDemand = null;
   state.usedClarification = false;
+  state.awaitingFinalAnswer = false;
   state.loading = true; render();
   try{
     const result = await callThinkingTurn(ans);
@@ -1050,8 +1051,6 @@ async function handleThinkingResult(studentResponse, result){
     // without a Learning Gap diagnosis (Phase 1 assumption: Insufficient follows the same
     // one-chance rule as Partial — flagged in the Milestone 1 report).
     if(state.usedClarification){
-      // Exit straight into the existing grading flow — no separate screen/second submit
-      // (Option A, per real UX feedback: the student already wrote this once).
       return submitAnswerDirect(studentResponse);
     }
     state.usedClarification = true;
@@ -1071,10 +1070,14 @@ async function handleThinkingResult(studentResponse, result){
   state.thinkingHistory.push({speaker:"ethixo", text: result.message});
   const shouldExit = result.resolved === true || state.thinkingTurn >= 3;
   if(shouldExit){
-    // The student's latest reply IS their final answer — grade it immediately. If they want
-    // to revise further, the existing "Retry Question" flow on the Feedback screen already
-    // covers that; no extra pre-grading edit screen needed.
-    return submitAnswerDirect(studentResponse);
+    // IMPORTANT: don't silently grade the reply that just triggered this — the student never
+    // gets to read Ethixo's final message that way (real testing caught this: the screen
+    // changed before they could read it). Show that message on this same chat screen, and
+    // wait for the student's OWN next input — informed by what Ethixo just said — before
+    // moving on to grading. Still no separate Rewrite page, still no duplicate-submit-of-
+    // the-same-text — just one genuine final message from the student on this same screen.
+    state.awaitingFinalAnswer = true;
+    goto("thinking");
   } else {
     state.thinkingTurn += 1;
     goto("thinking");
@@ -1083,31 +1086,38 @@ async function handleThinkingResult(studentResponse, result){
 
 function viewThinking(){
   const q = state.currentQuestion;
+  const finalMode = state.awaitingFinalAnswer;
   const history = state.thinkingHistory.map(function(turn){
     return '<div class="bubble '+(turn.speaker==="ethixo"?"ethixo":"student")+'">'+turn.text+'</div>';
   }).join("");
   return '<div class="crumb"><b>'+LEVEL_LABEL[q.level]+'</b> › <b>'+SUBJECT_META[q.subjectKey].name+'</b> › <b>'+q.lessonTitle+'</b></div>'+
   '<div class="card">'+
     '<h1 class="title">Let\'s Think This Through</h1>'+
-    '<p class="turnbadge">'+q.m+' Mark'+(q.m>1?"s":"")+' · Thinking Turn '+state.thinkingTurn+' of 3</p>'+
+    '<p class="turnbadge">'+q.m+' Mark'+(q.m>1?"s":"")+' · '+(finalMode? 'Write your final answer below' : 'Thinking Turn '+state.thinkingTurn+' of 3')+'</p>'+
     '<p style="font-weight:700;color:var(--ink);font-size:15px;margin-top:8px;">'+q.t+'</p>'+
     '<div class="chatlog">'+history+'</div>'+
-    '<textarea id="thinkingBox" placeholder="Type your response here…"></textarea>'+
+    '<textarea id="thinkingBox" placeholder="'+(finalMode? 'Type your final answer here…' : 'Type your response here…')+'"></textarea>'+
     (state.error? '<div class="errbox">'+state.error+'</div>':"")+
     '<div class="row between" style="margin-top:18px;">'+
       '<div class="row">'+
         '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
         '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
       '</div>'+
-      '<button class="btn btn-primary" onclick="submitThinkingReply()">'+(state.loading?"Thinking…":"Send")+'</button>'+
+      '<button class="btn btn-primary" onclick="submitThinkingReply()">'+(state.loading?(finalMode?"Submitting…":"Thinking…"):(finalMode?"Submit Final Answer":"Send"))+'</button>'+
     '</div>'+
-    (state.loading? '<div class="loading"><div class="spinner"></div>Ethixo is thinking…</div>':"")+
+    (state.loading? '<div class="loading"><div class="spinner"></div>'+(finalMode?"Ethixo is reading your final answer…":"Ethixo is thinking…")+'</div>':"")+
   '</div>';
 }
 async function submitThinkingReply(){
   const box = document.getElementById("thinkingBox");
   const reply = box.value.trim();
   if(!reply){ toast("Type a response first"); return; }
+  if(state.awaitingFinalAnswer){
+    // Turns are exhausted (or resolved) and the student has now read Ethixo's last message —
+    // this reply is their real final answer. Grade it directly, no further thinking.js call.
+    state.answerDraft = reply;
+    return submitAnswerDirect(reply);
+  }
   state.loading = true; state.error = null; render();
   try{
     const result = await callThinkingTurn(reply);
@@ -1117,6 +1127,7 @@ async function submitThinkingReply(){
     state.loading = false; state.error = "Couldn't reach Ethixo's thinking coach right now. ("+e.message+")"; render();
   }
 }
+
 
 /* ---- Feedback ---- */
 function viewFeedback(){
