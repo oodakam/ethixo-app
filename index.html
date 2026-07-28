@@ -2,6 +2,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1004,6 +1005,12 @@ async function startCustom(){
 /* ---- Answer ---- */
 function viewAnswer(){
   const q = state.currentQuestion;
+  // Bank questions (with a model answer) start the Thinking Cycle on submit — Ethixo is
+  // deciding/thinking, not grading yet, so the loading text should say so. Custom questions
+  // and bank questions without a model answer skip straight to grading (submitAnswerDirect),
+  // where "Reviewing…" is the honest label.
+  const willThink = !(q.custom || !q.a);
+  const loadingLabel = willThink ? "Thinking…" : "Reviewing…";
   return '<div class="crumb"><b>'+LEVEL_LABEL[q.level]+'</b> › <b>'+SUBJECT_META[q.subjectKey].name+'</b> › <b>'+q.lessonTitle+'</b></div>'+
   '<div class="card">'+
     '<h1 class="title">Write your Best Answer</h1>'+
@@ -1016,9 +1023,9 @@ function viewAnswer(){
         '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
         '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
       '</div>'+
-      '<button class="btn btn-primary" id="reviewBtn" onclick="submitAnswer()"'+(state.loading?' disabled':'')+'>'+(state.loading? "Reviewing…":"Review My Answer")+'</button>'+
+      '<button class="btn btn-primary" id="reviewBtn" onclick="submitAnswer()"'+(state.loading?' disabled':'')+'>'+(state.loading? loadingLabel:"Review My Answer")+'</button>'+
     '</div>'+
-    (state.loading? '<div class="loading"><div class="spinner"></div>Ethixo is reading your answer…</div>':"")+
+    (state.loading? '<div class="loading"><div class="spinner"></div>'+(willThink?"Thinking together…":"Ethixo is reading your answer…")+'</div>':"")+
   '</div>';
 }
 async function submitAnswer(){
