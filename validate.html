@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ethixo — Validation Tool (TEMPORARY, internal use only)</title>
+<style>
+  :root{
+    --brand:#00A86B; --brand-dark:#00875A; --brand-deep:#046B4A;
+    --brand-light:#E3F5EC; --brand-light-b:#BFE9D4;
+    --ink:#182420; --muted:#5E6D66;
+    --amber:#C9821F; --amber-bg:#FBF0DE;
+    --red:#B3261E; --red-bg:#FDECEC; --red-b:#F3C1BD;
+    --bg:#EAEAEA; --card:#FFFFFF; --border:#DBDFDC;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,Segoe UI,Arial,sans-serif;padding:20px;}
+  #app{max-width:900px;margin:0 auto;}
+  h1{font-size:20px;margin:0 0 4px;}
+  h2{font-size:15px;margin:0 0 10px;}
+  .warn{background:var(--amber-bg);border:1px solid #efd6a4;color:#8a5c14;padding:8px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;}
+  .err-banner{background:var(--red-bg);border:1px solid var(--red-b);color:var(--red);padding:8px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:18px;position:sticky;top:10px;z-index:5;}
+  .toolbar .stats{font-size:13px;color:var(--muted);margin-right:auto;}
+  button{cursor:pointer;font-family:inherit;font-weight:600;border-radius:8px;border:1px solid var(--border);background:#fff;padding:8px 14px;font-size:13px;}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand-dark);}
+  button.primary:hover{background:var(--brand-dark);}
+  button.ghost:hover{background:#f2f2f2;}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+  select,input[type=number],textarea{font-family:inherit;font-size:13.5px;border:1px solid var(--border);border-radius:8px;padding:7px 9px;width:100%;}
+  textarea{resize:vertical;}
+  label.f{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px;}
+  label.f:first-child{margin-top:0;}
+  .addpanel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:20px;}
+  .modeToggle{display:flex;gap:8px;margin-bottom:12px;}
+  .modeToggle button.active{background:var(--brand-light);border-color:var(--brand-light-b);color:var(--brand-deep);}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+  .readbox{background:#fbfcfb;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;white-space:pre-wrap;min-height:36px;}
+  .case{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
+  .case-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px;}
+  .case-head b{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+  .status{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;}
+  .status.pending{background:#eee;color:#777;}
+  .status.running{background:var(--amber-bg);color:#8a5c14;}
+  .status.done{background:var(--brand-light);color:var(--brand-deep);}
+  .status.error{background:var(--red-bg);color:var(--red);}
+  .q{font-weight:700;margin:4px 0 8px;font-size:15px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:10px;}
+  .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px;}
+  .box{background:#fbfcfb;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13.5px;white-space:pre-wrap;}
+  .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:10px 0;}
+  .field{border:1px solid var(--border);border-radius:8px;padding:8px 10px;}
+  .field .lbl{margin-bottom:3px;}
+  .field .val{font-size:13.5px;font-weight:600;}
+  .receipt{background:var(--brand-light);border:1px solid var(--brand-light-b);border-radius:8px;padding:10px 12px;font-size:13.5px;margin-top:8px;}
+  .receipt ul{margin:4px 0 0;padding-left:18px;}
+  .err{background:var(--red-bg);border:1px solid var(--red-b);color:var(--red);border-radius:8px;padding:8px 10px;font-size:13px;margin-top:8px;}
+  .judge{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;}
+  .judge button.agree.active{background:var(--brand);color:#fff;border-color:var(--brand-dark);}
+  .judge button.disagree.active{background:var(--red);color:#fff;border-color:var(--red);}
+  textarea.comment{flex:1 1 220px;min-width:200px;min-height:34px;}
+  .remove-link{font-size:12px;color:var(--muted);cursor:pointer;text-decoration:underline;background:none;border:none;padding:0;font-weight:400;}
+  .empty{color:var(--muted);font-size:13.5px;padding:20px;text-align:center;background:var(--card);border:1px dashed var(--border);border-radius:12px;}
+  .srcTag{font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;margin-left:6px;}
+  .srcTag.bank{background:var(--brand-light);color:var(--brand-deep);}
+  .srcTag.manual{background:var(--amber-bg);color:#8a5c14;}
+</style>
+</head>
+<body>
+<div id="app">Loading…</div>
+
+<script>
+/* =====================================================================
+   ETHIXO VALIDATION TOOL — TEMPORARY, INTERNAL USE ONLY
+   =====================================================================
+   Deploys immediately with an EMPTY, GROWING case library — no predefined
+   36-case dataset needed. Vijay picks a real question straight from the
+   live question bank (auto-loaded from index.html, same origin), writes
+   ONE representative student answer, and adds it to the set. Repeat over
+   time; once ~36 well-reviewed cases accumulate, Export Results becomes
+   "Validation Dataset v1.0" — reusable later for regression testing.
+
+   Both /api/thinking and /api/feedback are called same-origin (this file
+   is deployed on test.ethixo.ai itself), so there is no CORS issue and no
+   manual copy-pasting of conversations.
+
+   Not linked from the main app anywhere; safe to delete once validation
+   work is done.
+   ===================================================================== */
+
+const CASES_KEY = "ethixo_validation_cases_v1";
+const RESULTS_KEY = "ethixo_validation_results_v1";
+const TARGET_COUNT = 36;
+
+let bank = null;          // { SUBJECT_META, LEVEL_LABEL, LEVELS } once loaded, else null
+let bankError = null;     // error message if auto-load failed (falls back to manual entry only)
+let addMode = "bank";     // "bank" | "manual" — which Add-a-case form is showing
+let picker = { level: null, subjectKey: null, chapterId: null, lessonId: null, qIdx: null }; // bank picker selections
+let manualDraft = { subject: "", question: "", marks: 2, modelAnswer: "", studentAnswer: "" };
+let bankDraftAnswer = "";
+
+let cases = loadCases();
+let results = loadResults();
+let running = false;
+let stopRequested = false;
+
+// ---------------------------------------------------------------------
+// Load the REAL live question bank straight from index.html (same origin).
+// Only the pure data block (SUBJECT_META / LEVEL_LABEL / mkChapter / mkLesson
+// / LEVELS) is extracted and evaluated in an isolated scope — none of the
+// app's own render/state logic is touched or executed.
+// ---------------------------------------------------------------------
+async function loadBank(){
+  try{
+    const res = await fetch("/index.html");
+    if(!res.ok) throw new Error("Could not fetch index.html (" + res.status + ")");
+    const html = await res.text();
+    const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
+    if(!scriptMatch) throw new Error("Could not find the app's <script> block");
+    const full = scriptMatch[1];
+    const startMarker = "const SUBJECT_META";
+    const endMarker = "/* ---------- State ---------- */";
+    const startIdx = full.indexOf(startMarker);
+    const endIdx = full.indexOf(endMarker);
+    if(startIdx === -1 || endIdx === -1 || endIdx <= startIdx){
+      throw new Error("Could not locate the question-bank data block (index.html structure may have changed)");
+    }
+    const snippet = full.slice(startIdx, endIdx);
+    const factory = new Function(snippet + "\nreturn { SUBJECT_META, LEVEL_LABEL, LEVELS };");
+    bank = factory();
+    bankError = null;
+  }catch(e){
+    bank = null;
+    bankError = e.message;
+    addMode = "manual";
+  }
+  window.bank = bank; window.bankError = bankError; // expose current values (plain top-level let isn't on window)
+  render();
+}
+
+// ---------------------------------------------------------------------
+// Persistence
+// ---------------------------------------------------------------------
+function loadCases(){
+  try{ return JSON.parse(localStorage.getItem(CASES_KEY) || "[]"); }catch(e){ return []; }
+}
+function saveCases(){ try{ localStorage.setItem(CASES_KEY, JSON.stringify(cases)); }catch(e){ console.error("save cases failed", e); } }
+function loadResults(){
+  try{ return JSON.parse(localStorage.getItem(RESULTS_KEY) || "{}"); }catch(e){ return {}; }
+}
+function saveResults(){ try{ localStorage.setItem(RESULTS_KEY, JSON.stringify(results)); }catch(e){ console.error("save results failed", e); } }
+function resultFor(id){
+  if(!results[id]) results[id] = { status: "pending", thinking: null, feedback: null, error: null, judgment: null, comment: "" };
+  return results[id];
+}
+
+// ---------------------------------------------------------------------
+// Bank picker helpers
+// ---------------------------------------------------------------------
+function unlockedChapters(level, subjectKey){
+  if(!bank || !level || !subjectKey) return [];
+  const subj = bank.LEVELS[level] && bank.LEVELS[level][subjectKey];
+  if(!subj) return [];
+  return subj.chapters.filter(ch => !ch.locked && ch.lessons && ch.lessons.length);
+}
+function lessonsFor(level, subjectKey, chapterId){
+  const ch = unlockedChapters(level, subjectKey).find(c => c.id === chapterId);
+  return ch ? ch.lessons : [];
+}
+function questionsFor(level, subjectKey, chapterId, lessonId){
+  const lesson = lessonsFor(level, subjectKey, chapterId).find(l => l.id === lessonId);
+  // Only questions WITH a confidential model answer are usable for Thinking Cycle validation
+  // (bank questions without one already fall back to direct grading in the real app too).
+  return lesson ? lesson.questions.filter(q => q.a) : [];
+}
+
+function setPicker(field, value){
+  picker[field] = value;
+  if(field === "level"){ picker.subjectKey=null; picker.chapterId=null; picker.lessonId=null; picker.qIdx=null; }
+  if(field === "subjectKey"){ picker.chapterId=null; picker.lessonId=null; picker.qIdx=null; }
+  if(field === "chapterId"){ picker.lessonId=null; picker.qIdx=null; }
+  if(field === "lessonId"){ picker.qIdx=null; }
+  render();
+}
+
+function addBankCase(){
+  const qs = questionsFor(picker.level, picker.subjectKey, picker.chapterId, picker.lessonId);
+  const q = qs[picker.qIdx];
+  if(!q){ alert("Please select a question first."); return; }
+  if(!bankDraftAnswer.trim()){ alert("Please write a representative student answer first."); return; }
+  const c = {
+    id: "case-" + Date.now() + "-" + Math.random().toString(36).slice(2,7),
+    source: "bank",
+    subject: bank.SUBJECT_META[picker.subjectKey].name,
+    level: bank.LEVEL_LABEL[picker.level],
+    question: q.t, marks: q.m, modelAnswer: q.a,
+    studentAnswer: bankDraftAnswer.trim(),
+    addedAt: Date.now(),
+  };
+  cases.unshift(c);
+  saveCases();
+  bankDraftAnswer = ""; // keep the same question selected so another representative answer can be added quickly
+  render();
+}
+
+function addManualCase(){
+  const d = manualDraft;
+  if(!d.question.trim() || !d.modelAnswer.trim() || !d.studentAnswer.trim()){
+    alert("Please fill in Question, Model Answer, and Student Answer.");
+    return;
+  }
+  const c = {
+    id: "case-" + Date.now() + "-" + Math.random().toString(36).slice(2,7),
+    source: "manual",
+    subject: d.subject.trim() || "—", level: "",
+    question: d.question.trim(), marks: Number(d.marks) || 1, modelAnswer: d.modelAnswer.trim(),
+    studentAnswer: d.studentAnswer.trim(),
+    addedAt: Date.now(),
+  };
+  cases.unshift(c);
+  saveCases();
+  manualDraft = { subject: d.subject, question: "", marks: d.marks, modelAnswer: "", studentAnswer: "" };
+  render();
+}
+
+function removeCase(id){
+  if(!confirm("Remove this case from the validation set? This cannot be undone.")) return;
+  cases = cases.filter(c => c.id !== id);
+  delete results[id];
+  saveCases(); saveResults();
+  render();
+}
+
+function setManualField(field, val){ manualDraft[field] = val; }
+function setBankDraftAnswer(val){ bankDraftAnswer = val; }
+function setAddMode(mode){ addMode = mode; render(); }
+
+// ---------------------------------------------------------------------
+// API calls — same-origin relative paths, matching the real production
+// request shapes used by index.html.
+// ---------------------------------------------------------------------
+async function callThinking(c){
+  const res = await fetch("/api/thinking", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      question: c.question, marks: c.marks, modelAnswer: c.modelAnswer,
+      turnNumber: 1, questionDemand: null, conversationHistory: [],
+      studentResponse: c.studentAnswer
+    })
+  });
+  const data = await res.json();
+  if(!res.ok){ throw new Error(data.error || ("Thinking endpoint error " + res.status)); }
+  return data;
+}
+async function callFeedback(c){
+  const res = await fetch("/api/feedback", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question: c.question, marks: c.marks, answer: c.studentAnswer, modelAnswer: c.modelAnswer })
+  });
+  const data = await res.json();
+  if(!res.ok){ throw new Error(data.error || ("Feedback endpoint error " + res.status)); }
+  return data;
+}
+
+async function runCase(c){
+  const r = resultFor(c.id);
+  r.status = "running"; r.error = null;
+  render();
+  try{
+    const [thinking, feedback] = await Promise.all([callThinking(c), callFeedback(c)]);
+    r.thinking = thinking; r.feedback = feedback; r.status = "done";
+  }catch(e){
+    r.status = "error"; r.error = e.message;
+  }
+  saveResults(); render();
+}
+
+async function runAll(){
+  running = true; stopRequested = false; render();
+  for(const c of cases){
+    if(stopRequested) break;
+    if(resultFor(c.id).status === "done") continue; // don't re-spend on already-run cases
+    await runCase(c);
+  }
+  running = false; render();
+}
+function stopRun(){ stopRequested = true; render(); }
+
+function setJudgment(id, val){
+  const r = resultFor(id);
+  r.judgment = (r.judgment === val) ? null : val;
+  saveResults(); render();
+}
+function setComment(id, text){
+  resultFor(id).comment = text;
+  saveResults();
+}
+function resetAll(){
+  if(!confirm("This clears the ENTIRE validation set (all cases + judgments) on THIS device. Continue?")) return;
+  localStorage.removeItem(CASES_KEY); localStorage.removeItem(RESULTS_KEY);
+  cases = []; results = {};
+  render();
+}
+function exportResults(){
+  const payload = cases.map(c => {
+    const r = resultFor(c.id);
+    return {
+      id: c.id, source: c.source, subject: c.subject, level: c.level || null,
+      question: c.question, marks: c.marks, modelAnswer: c.modelAnswer, studentAnswer: c.studentAnswer,
+      aiThinking: r.thinking, aiFeedback: r.feedback,
+      judgment: r.judgment, comment: r.comment,
+    };
+  });
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "ethixo-validation-dataset-" + new Date().toISOString().slice(0,10) + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+// ---------------------------------------------------------------------
+// Render
+// ---------------------------------------------------------------------
+function esc(s){ return String(s==null?"":s).replace(/[&<>]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[m])); }
+function fmtGap(g){ if(!g) return "—"; if(typeof g === "string") return g; return (g.family||"") + (g.specific? ": "+g.specific : ""); }
+function opt(value, label, selected){ return '<option value="'+esc(value)+'"'+(selected?' selected':'')+'>'+esc(label)+'</option>'; }
+
+function renderAddPanel(){
+  const modeToggle =
+    '<div class="modeToggle">' +
+      '<button class="' + (addMode==="bank"?"active":"") + '" onclick="setAddMode(\'bank\')" ' + (bank? '' : 'disabled title="Question bank did not load"') + '>📚 Pick from Question Bank</button>' +
+      '<button class="' + (addMode==="manual"?"active":"") + '" onclick="setAddMode(\'manual\')">✍️ Manual Entry</button>' +
+    '</div>';
+
+  let form = "";
+  if(addMode === "bank" && bank){
+    const levels = Object.keys(bank.LEVEL_LABEL);
+    const subjectKeys = picker.level ? Object.keys(bank.LEVELS[picker.level]) : [];
+    const chapters = unlockedChapters(picker.level, picker.subjectKey);
+    const lessons = lessonsFor(picker.level, picker.subjectKey, picker.chapterId);
+    const questions = questionsFor(picker.level, picker.subjectKey, picker.chapterId, picker.lessonId);
+    const selectedQ = (picker.qIdx!=null) ? questions[picker.qIdx] : null;
+
+    form =
+      '<div class="grid3">' +
+        '<div><label class="f">Level</label><select onchange="setPicker(\'level\', this.value||null)">' +
+          opt("", "Select…", !picker.level) + levels.map(l => opt(l, bank.LEVEL_LABEL[l], picker.level===l)).join("") +
+        '</select></div>' +
+        '<div><label class="f">Subject</label><select onchange="setPicker(\'subjectKey\', this.value||null)" ' + (!picker.level?'disabled':'') + '>' +
+          opt("", "Select…", !picker.subjectKey) + subjectKeys.map(s => opt(s, bank.SUBJECT_META[s].name, picker.subjectKey===s)).join("") +
+        '</select></div>' +
+        '<div><label class="f">Chapter</label><select onchange="setPicker(\'chapterId\', this.value||null)" ' + (!picker.subjectKey?'disabled':'') + '>' +
+          opt("", "Select…", !picker.chapterId) + chapters.map(c => opt(c.id, c.title, picker.chapterId===c.id)).join("") +
+        '</select></div>' +
+      '</div>' +
+      '<div class="grid2" style="margin-top:12px;">' +
+        '<div><label class="f">Lesson</label><select onchange="setPicker(\'lessonId\', this.value||null)" ' + (!picker.chapterId?'disabled':'') + '>' +
+          opt("", "Select…", !picker.lessonId) + lessons.map(l => opt(l.id, l.title, picker.lessonId===l.id)).join("") +
+        '</select></div>' +
+        '<div><label class="f">Question (only ones with a model answer are shown)</label><select onchange="setPicker(\'qIdx\', this.value===\'\'?null:Number(this.value))" ' + (!picker.lessonId?'disabled':'') + '>' +
+          opt("", questions.length? "Select…" : "No usable questions in this lesson", picker.qIdx==null) +
+          questions.map((q,i) => opt(i, q.t.slice(0,70) + (q.t.length>70?"…":"") + " (" + q.m + "m)", picker.qIdx===i)).join("") +
+        '</select></div>' +
+      '</div>' +
+      (selectedQ ?
+        '<div class="row2" style="margin-top:12px;">' +
+          '<div><label class="f">Marks</label><div class="readbox">' + selectedQ.m + '</div></div>' +
+          '<div><label class="f">Confidential Model Answer</label><div class="readbox">' + esc(selectedQ.a) + '</div></div>' +
+        '</div>' +
+        '<label class="f">Representative Student Answer (you write this)</label>' +
+        '<textarea rows="3" oninput="setBankDraftAnswer(this.value)" placeholder="Write a typical student response — weak, average, or strong, your choice…">' + esc(bankDraftAnswer) + '</textarea>' +
+        '<button class="primary" style="margin-top:10px;" onclick="addBankCase()">+ Add to Validation Set</button>'
+        : '<p style="color:var(--muted);font-size:13px;margin-top:10px;">Select a level, subject, chapter, lesson and question above.</p>');
+  } else {
+    const d = manualDraft;
+    form =
+      '<div class="grid2">' +
+        '<div><label class="f">Subject (free text)</label><input type="text" value="' + esc(d.subject) + '" oninput="setManualField(\'subject\', this.value)" placeholder="e.g. English"></div>' +
+        '<div><label class="f">Marks</label><input type="number" min="1" value="' + esc(d.marks) + '" oninput="setManualField(\'marks\', this.value)"></div>' +
+      '</div>' +
+      '<label class="f">Question</label><textarea rows="2" oninput="setManualField(\'question\', this.value)" placeholder="Paste or type the question…">' + esc(d.question) + '</textarea>' +
+      '<label class="f">Confidential Model Answer</label><textarea rows="2" oninput="setManualField(\'modelAnswer\', this.value)" placeholder="What a full-marks answer should cover…">' + esc(d.modelAnswer) + '</textarea>' +
+      '<label class="f">Representative Student Answer</label><textarea rows="3" oninput="setManualField(\'studentAnswer\', this.value)" placeholder="Write a typical student response…">' + esc(d.studentAnswer) + '</textarea>' +
+      '<button class="primary" style="margin-top:10px;" onclick="addManualCase()">+ Add to Validation Set</button>';
+  }
+
+  return '<div class="addpanel"><h2>➕ Add a Validation Case</h2>' + modeToggle + form + '</div>';
+}
+
+function render(){
+  const total = cases.length;
+  const done = cases.filter(c => resultFor(c.id).status === "done").length;
+  const agreed = cases.filter(c => resultFor(c.id).judgment === "agree").length;
+  const disagreed = cases.filter(c => resultFor(c.id).judgment === "disagree").length;
+  const reviewed = agreed + disagreed;
+
+  const toolbar = total ?
+    '<div class="toolbar">' +
+      '<div class="stats">' + total + ' case' + (total!==1?'s':'') + ' in set &nbsp;·&nbsp; ' + done + ' run &nbsp;·&nbsp; ✅ ' + agreed + ' &nbsp;❌ ' + disagreed +
+        ' &nbsp;·&nbsp; ' + reviewed + ' / ~' + TARGET_COUNT + ' toward Validation Dataset v1.0</div>' +
+      (running
+        ? '<button class="ghost" onclick="stopRun()">Stop</button>'
+        : '<button class="primary" onclick="runAll()">▶ Run All Pending</button>') +
+      '<button class="ghost" onclick="exportResults()">⬇ Export Results (JSON)</button>' +
+      '<button class="ghost" onclick="resetAll()">Reset Everything</button>' +
+    '</div>' : "";
+
+  const cards = cases.map(c => {
+    const r = resultFor(c.id);
+    let body = "";
+
+    if(r.status === "error"){
+      body += '<div class="err">⚠ ' + esc(r.error) + ' — <a href="#" onclick="event.preventDefault();runCase(cases.find(x=>x.id===\'' + c.id + '\'))">retry this case</a></div>';
+    }
+
+    if(r.thinking || r.feedback){
+      const t = r.thinking || {}; const f = r.feedback || {};
+      body +=
+        '<div class="fields">' +
+          '<div class="field"><div class="lbl">Response Gate</div><div class="val">' + esc(t.responseGate || "—") + '</div></div>' +
+          '<div class="field"><div class="lbl">Learning Gap</div><div class="val">' + esc(fmtGap(t.learningGap)) + (t.noThinkingCycle? ' <span style="font-weight:400;color:var(--muted);">(no thinking cycle)</span>':'') + '</div></div>' +
+          '<div class="field"><div class="lbl">Thinking Move</div><div class="val">' + esc(t.thinkingMove || "—") + '</div></div>' +
+          '<div class="field"><div class="lbl">Confidence</div><div class="val">' + esc(t.confidence || "—") + '</div></div>' +
+        '</div>' +
+        '<div class="lbl">Ethixo\'s message (Thinking Cycle turn 1)</div>' +
+        '<div class="box">' + esc(t.message || "—") + '</div>' +
+        '<div class="lbl" style="margin-top:8px;">Direct-grading snapshot (Feedback engine, no coaching context) — Score ' + (f.score!=null? f.score+"/"+c.marks : "—") + '</div>' +
+        (f.learningReceipt && f.learningReceipt.length ?
+          '<div class="receipt">🌱 <b>Learning Receipt</b><ul>' + f.learningReceipt.map(x=>'<li>'+esc(x)+'</li>').join("") + '</ul></div>'
+          : '<div class="box" style="color:var(--muted);">Learning Receipt: empty (expected for a single-shot case with no real thinking-cycle conversation)</div>');
+    }
+
+    const runBtn = (r.status === "pending" || r.status === "error")
+      ? '<button class="ghost" onclick="runCase(cases.find(x=>x.id===\'' + c.id + '\'))">▶ Run this case</button>'
+      : "";
+
+    return '<div class="case">' +
+      '<div class="case-head"><b>' + esc(c.subject) + (c.level? ' · '+esc(c.level):'') + ' · ' + c.marks + ' mark' + (c.marks>1?'s':'') +
+        '<span class="srcTag ' + c.source + '">' + (c.source==="bank"?"BANK":"MANUAL") + '</span></b>' +
+        '<span class="status ' + r.status + '">' + r.status.toUpperCase() + '</span></div>' +
+      '<div class="q">' + esc(c.question) + '</div>' +
+      '<div class="row2">' +
+        '<div><div class="lbl">Student Answer</div><div class="box">' + esc(c.studentAnswer) + '</div></div>' +
+        '<div><div class="lbl">Confidential Model Answer</div><div class="box">' + esc(c.modelAnswer) + '</div></div>' +
+      '</div>' +
+      body +
+      (r.status === "done" ?
+        '<div class="judge">' +
+          '<button class="agree' + (r.judgment==='agree'?' active':'') + '" onclick="setJudgment(\'' + c.id + '\',\'agree\')">✅ Agree</button>' +
+          '<button class="disagree' + (r.judgment==='disagree'?' active':'') + '" onclick="setJudgment(\'' + c.id + '\',\'disagree\')">❌ Disagree</button>' +
+          '<textarea class="comment" placeholder="📝 Optional comment…" oninput="setComment(\'' + c.id + '\', this.value)">' + esc(r.comment) + '</textarea>' +
+        '</div>' : runBtn) +
+      '<div style="margin-top:10px;"><button class="remove-link" onclick="removeCase(\'' + c.id + '\')">Remove this case</button></div>' +
+    '</div>';
+  }).join("");
+
+  const list = total ? cards : '<div class="empty">No cases yet — add your first one above 👆</div>';
+
+  const bankErrBanner = bankError ?
+    '<div class="err-banner">⚠ Couldn\'t auto-load the live question bank (' + esc(bankError) + '). You can still add cases manually below.</div>' : "";
+
+  document.getElementById("app").innerHTML =
+    '<h1>🌱 Ethixo — Thinking Cycle Validation (internal tool)</h1>' +
+    '<div class="warn">Temporary tool for Vijay/ChatGPT Bro review only — not linked from the live app, no student-facing effect. Each "Run" makes 2 real Claude API calls (thinking + feedback). This set grows over time; once you have ~' + TARGET_COUNT + ' well-reviewed cases, Export Results becomes Validation Dataset v1.0.</div>' +
+    bankErrBanner +
+    renderAddPanel() +
+    toolbar + list;
+}
+
+render();
+loadBank();
+
+window.setPicker = setPicker; window.addBankCase = addBankCase; window.addManualCase = addManualCase;
+window.setManualField = setManualField; window.setBankDraftAnswer = setBankDraftAnswer; window.setAddMode = setAddMode;
+window.removeCase = removeCase; window.runCase = runCase; window.runAll = runAll; window.stopRun = stopRun;
+window.setJudgment = setJudgment; window.setComment = setComment; window.resetAll = resetAll; window.exportResults = exportResults;
+window.loadBank = loadBank; window.unlockedChapters = unlockedChapters; window.lessonsFor = lessonsFor; window.questionsFor = questionsFor;
+</script>
+</body>
+</html>
