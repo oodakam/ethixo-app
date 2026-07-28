@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -65,6 +66,11 @@
   .srcTag{font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;margin-left:6px;}
   .srcTag.bank{background:var(--brand-light);color:var(--brand-deep);}
   .srcTag.manual{background:var(--amber-bg);color:#8a5c14;}
+  .genPanel{margin-top:12px;padding-top:12px;border-top:1px dashed var(--border);}
+  .genGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+  .genCard{border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:#fbfcfb;}
+  .genCard-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .genTag{font-size:12px;font-weight:700;}
 </style>
 </head>
 <body>
@@ -99,6 +105,10 @@ let addMode = "bank";     // "bank" | "manual" — which Add-a-case form is show
 let picker = { level: null, subjectKey: null, chapterId: null, lessonId: null, qIdx: null }; // bank picker selections
 let manualDraft = { subject: "", question: "", marks: 2, modelAnswer: "", studentAnswer: "" };
 let bankDraftAnswer = "";
+let generated = null;       // { strong, partial, misconception, insufficient } once generated, else null
+let generating = false;     // true while the /api/generate-answers call is in flight
+let generateError = null;
+let generatedAdded = {};    // { strong: true, ... } — tracks which categories have already been added as cases
 
 let cases = loadCases();
 let results = loadResults();
@@ -130,6 +140,7 @@ async function loadBank(){
     const factory = new Function(snippet + "\nreturn { SUBJECT_META, LEVEL_LABEL, LEVELS };");
     bank = factory();
     bankError = null;
+    addMode = "bank";
   }catch(e){
     bank = null;
     bankError = e.message;
@@ -181,6 +192,7 @@ function setPicker(field, value){
   if(field === "subjectKey"){ picker.chapterId=null; picker.lessonId=null; picker.qIdx=null; }
   if(field === "chapterId"){ picker.lessonId=null; picker.qIdx=null; }
   if(field === "lessonId"){ picker.qIdx=null; }
+  generated = null; generateError = null; bankDraftAnswer = ""; generatedAdded = {};
   render();
 }
 
@@ -191,7 +203,7 @@ function addBankCase(){
   if(!bankDraftAnswer.trim()){ alert("Please write a representative student answer first."); return; }
   const c = {
     id: "case-" + Date.now() + "-" + Math.random().toString(36).slice(2,7),
-    source: "bank",
+    source: "bank", answerSource: "human-written",
     subject: bank.SUBJECT_META[picker.subjectKey].name,
     level: bank.LEVEL_LABEL[picker.level],
     question: q.t, marks: q.m, modelAnswer: q.a,
@@ -204,6 +216,54 @@ function addBankCase(){
   render();
 }
 
+async function generateAnswers(){
+  const qs = questionsFor(picker.level, picker.subjectKey, picker.chapterId, picker.lessonId);
+  const q = qs[picker.qIdx];
+  if(!q){ alert("Please select a question first."); return; }
+  generating = true; generateError = null; render();
+  try{
+    const res = await fetch("/api/generate-answers", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q.t, marks: q.m, modelAnswer: q.a })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || ("Generate endpoint error " + res.status));
+    generated = data;
+    generatedAdded = {};
+  }catch(e){
+    generated = null; generateError = e.message;
+  }
+  generating = false;
+  window.generated = generated; window.generateError = generateError;
+  render();
+}
+
+function setGeneratedField(category, val){ if(generated) generated[category] = val; }
+
+function addGeneratedCase(category){
+  const qs = questionsFor(picker.level, picker.subjectKey, picker.chapterId, picker.lessonId);
+  const q = qs[picker.qIdx];
+  if(!q || !generated || !generated[category]) return;
+  const c = {
+    id: "case-" + Date.now() + "-" + Math.random().toString(36).slice(2,7),
+    source: "bank", answerSource: "ai-generated", expectedCategory: category,
+    subject: bank.SUBJECT_META[picker.subjectKey].name,
+    level: bank.LEVEL_LABEL[picker.level],
+    question: q.t, marks: q.m, modelAnswer: q.a,
+    studentAnswer: generated[category].trim(),
+    addedAt: Date.now(),
+  };
+  cases.unshift(c);
+  saveCases();
+  generatedAdded[category] = true;
+  render();
+}
+function addAllGeneratedCases(){
+  ["strong","partial","misconception","insufficient"].forEach(cat => {
+    if(generated && generated[cat] && generated[cat].trim() && !generatedAdded[cat]) addGeneratedCase(cat);
+  });
+}
+
 function addManualCase(){
   const d = manualDraft;
   if(!d.question.trim() || !d.modelAnswer.trim() || !d.studentAnswer.trim()){
@@ -212,7 +272,7 @@ function addManualCase(){
   }
   const c = {
     id: "case-" + Date.now() + "-" + Math.random().toString(36).slice(2,7),
-    source: "manual",
+    source: "manual", answerSource: "human-written",
     subject: d.subject.trim() || "—", level: "",
     question: d.question.trim(), marks: Number(d.marks) || 1, modelAnswer: d.modelAnswer.trim(),
     studentAnswer: d.studentAnswer.trim(),
@@ -306,7 +366,8 @@ function exportResults(){
   const payload = cases.map(c => {
     const r = resultFor(c.id);
     return {
-      id: c.id, source: c.source, subject: c.subject, level: c.level || null,
+      id: c.id, source: c.source, answerSource: c.answerSource || null, expectedCategory: c.expectedCategory || null,
+      subject: c.subject, level: c.level || null,
       question: c.question, marks: c.marks, modelAnswer: c.modelAnswer, studentAnswer: c.studentAnswer,
       aiThinking: r.thinking, aiFeedback: r.feedback,
       judgment: r.judgment, comment: r.comment,
@@ -325,6 +386,50 @@ function exportResults(){
 function esc(s){ return String(s==null?"":s).replace(/[&<>]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[m])); }
 function fmtGap(g){ if(!g) return "—"; if(typeof g === "string") return g; return (g.family||"") + (g.specific? ": "+g.specific : ""); }
 function opt(value, label, selected){ return '<option value="'+esc(value)+'"'+(selected?' selected':'')+'>'+esc(label)+'</option>'; }
+
+function categoryMeta(cat){
+  return {
+    strong: { label: "Strong", emoji: "💪", desc: "near full marks" },
+    partial: { label: "Partial", emoji: "🌗", desc: "missing a key detail" },
+    misconception: { label: "Misconception", emoji: "🤔", desc: "confidently wrong" },
+    insufficient: { label: "Insufficient", emoji: "💭", desc: "thin / low-effort" },
+  }[cat];
+}
+
+function renderGeneratePanel(){
+  let out = '<div class="genPanel">';
+
+  if(!generated && !generating){
+    out += '<button class="primary" onclick="generateAnswers()">🤖 Generate Representative Student Answers</button>' +
+      '<p style="color:var(--muted);font-size:12px;margin:6px 0 0;">1 AI call generates all 4 — you review, edit if needed, then add.</p>';
+  }
+  if(generating){
+    out += '<p style="color:var(--muted);font-size:13px;">🤖 Generating 4 representative answers…</p>';
+  }
+  if(generateError){
+    out += '<div class="err">⚠ ' + esc(generateError) + ' — <a href="#" onclick="event.preventDefault();generateAnswers()">try again</a></div>';
+  }
+  if(generated && !generating){
+    const cats = ["strong","partial","misconception","insufficient"];
+    const anyNotAdded = cats.some(c => generated[c] && !generatedAdded[c]);
+    out += '<div class="genGrid">' + cats.map(cat => {
+      const meta = categoryMeta(cat);
+      const added = !!generatedAdded[cat];
+      return '<div class="genCard">' +
+        '<div class="genCard-head"><span class="genTag">' + meta.emoji + ' ' + meta.label + '</span><span style="font-size:11px;color:var(--muted);">' + meta.desc + '</span></div>' +
+        '<textarea rows="3" oninput="setGeneratedField(\'' + cat + '\', this.value)">' + esc(generated[cat] || "") + '</textarea>' +
+        '<button class="' + (added? 'ghost' : 'primary') + '" style="margin-top:6px;width:100%;" onclick="addGeneratedCase(\'' + cat + '\')">' + (added? '✓ Added (click to add again)' : '+ Add to Validation Set') + '</button>' +
+      '</div>';
+    }).join("") + '</div>' +
+    (anyNotAdded ?
+      '<button class="ghost" style="margin-top:10px;" onclick="addAllGeneratedCases()">+ Add All 4 to Validation Set</button>'
+      : '') +
+    '<p style="margin-top:8px;"><a href="#" onclick="event.preventDefault();generateAnswers()" style="font-size:12px;color:var(--muted);">🔄 Regenerate a fresh set of 4</a></p>';
+  }
+
+  out += '</div>';
+  return out;
+}
 
 function renderAddPanel(){
   const modeToggle =
@@ -368,9 +473,11 @@ function renderAddPanel(){
           '<div><label class="f">Marks</label><div class="readbox">' + selectedQ.m + '</div></div>' +
           '<div><label class="f">Confidential Model Answer</label><div class="readbox">' + esc(selectedQ.a) + '</div></div>' +
         '</div>' +
-        '<label class="f">Representative Student Answer (you write this)</label>' +
-        '<textarea rows="3" oninput="setBankDraftAnswer(this.value)" placeholder="Write a typical student response — weak, average, or strong, your choice…">' + esc(bankDraftAnswer) + '</textarea>' +
-        '<button class="primary" style="margin-top:10px;" onclick="addBankCase()">+ Add to Validation Set</button>'
+        renderGeneratePanel() +
+        '<details style="margin-top:14px;"><summary style="cursor:pointer;font-size:12px;color:var(--muted);">✍️ Or write your own representative answer instead</summary>' +
+          '<textarea rows="3" style="margin-top:8px;" oninput="setBankDraftAnswer(this.value)" placeholder="Write a typical student response — weak, average, or strong, your choice…">' + esc(bankDraftAnswer) + '</textarea>' +
+          '<button class="primary" style="margin-top:10px;" onclick="addBankCase()">+ Add to Validation Set</button>' +
+        '</details>'
         : '<p style="color:var(--muted);font-size:13px;margin-top:10px;">Select a level, subject, chapter, lesson and question above.</p>');
   } else {
     const d = manualDraft;
@@ -437,7 +544,9 @@ function render(){
 
     return '<div class="case">' +
       '<div class="case-head"><b>' + esc(c.subject) + (c.level? ' · '+esc(c.level):'') + ' · ' + c.marks + ' mark' + (c.marks>1?'s':'') +
-        '<span class="srcTag ' + c.source + '">' + (c.source==="bank"?"BANK":"MANUAL") + '</span></b>' +
+        '<span class="srcTag ' + c.source + '">' + (c.source==="bank"?"BANK":"MANUAL") + '</span>' +
+        (c.expectedCategory ? '<span class="srcTag manual" style="background:var(--brand-light);color:var(--brand-deep);">Written as: ' + esc(categoryMeta(c.expectedCategory).label) + '</span>' : '') +
+        '</b>' +
         '<span class="status ' + r.status + '">' + r.status.toUpperCase() + '</span></div>' +
       '<div class="q">' + esc(c.question) + '</div>' +
       '<div class="row2">' +
@@ -458,7 +567,7 @@ function render(){
   const list = total ? cards : '<div class="empty">No cases yet — add your first one above 👆</div>';
 
   const bankErrBanner = bankError ?
-    '<div class="err-banner">⚠ Couldn\'t auto-load the live question bank (' + esc(bankError) + '). You can still add cases manually below.</div>' : "";
+    '<div class="err-banner">⚠ Couldn\'t auto-load the live question bank (' + esc(bankError) + '). You can still add cases manually below, or <a href="#" onclick="event.preventDefault();loadBank()" style="color:inherit;">try loading it again</a>.</div>' : "";
 
   document.getElementById("app").innerHTML =
     '<h1>🌱 Ethixo — Thinking Cycle Validation (internal tool)</h1>' +
@@ -476,6 +585,8 @@ window.setManualField = setManualField; window.setBankDraftAnswer = setBankDraft
 window.removeCase = removeCase; window.runCase = runCase; window.runAll = runAll; window.stopRun = stopRun;
 window.setJudgment = setJudgment; window.setComment = setComment; window.resetAll = resetAll; window.exportResults = exportResults;
 window.loadBank = loadBank; window.unlockedChapters = unlockedChapters; window.lessonsFor = lessonsFor; window.questionsFor = questionsFor;
+window.generateAnswers = generateAnswers; window.setGeneratedField = setGeneratedField;
+window.addGeneratedCase = addGeneratedCase; window.addAllGeneratedCases = addAllGeneratedCases;
 </script>
 </body>
 </html>
