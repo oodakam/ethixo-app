@@ -1,6 +1,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -101,6 +102,9 @@
   .receipt-list{list-style:none;margin:0;padding:0;}
   .receipt-list li{display:flex;gap:8px;padding:5px 0;font-size:14px;line-height:1.45;color:var(--ink);}
   .receipt-list li::before{content:"🌱";flex:none;}
+  .completion-block{margin-top:16px;background:linear-gradient(120deg,var(--brand-light),#fff);border:1.5px solid var(--brand-light-b);border-radius:14px;padding:20px 18px;text-align:center;}
+  .completion-block h3{margin:0 0 6px;font-size:18px;color:var(--brand-deep);}
+  .completion-block p{margin:0;font-size:14px;color:var(--ink);}
   .history{border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:16px;background:#fbfcfb;}
   .hattempt{display:flex;justify-content:space-between;padding:8px 0;border-top:1px dashed var(--border);font-size:13.5px;}
   .hattempt:first-child{border-top:none;}
@@ -443,19 +447,19 @@ const LEVELS = {
     SS: { chapters:[
       mkChapter("ch1","Chapter 1: Discovering Southeast Asia", [
         mkLesson("1.1","1.1 Location of Southeast Asian Countries", [
-          {t:"Name three countries located in Southeast Asia.", m:3},
-          {t:"Which large body of water lies between Singapore and its nearest island neighbours?", m:1},
-          {t:"Explain how Singapore's location has helped it grow as a port city.", m:5},
+          {t:"Name three countries located in Southeast Asia.", m:3, a:"Accept any three: Singapore, Malaysia, Indonesia, Thailand, Vietnam, the Philippines, Myanmar, Cambodia, Laos, Brunei, Timor-Leste."},
+          {t:"Which large body of water lies between Singapore and its nearest island neighbours?", m:1, a:"The Singapore Strait, which separates Singapore from Indonesia's Riau Islands to the south."},
+          {t:"Explain how Singapore's location has helped it grow as a port city.", m:5, a:"Singapore sits along the Straits of Malacca and the Singapore Strait, one of the world's busiest shipping routes linking the Indian Ocean to the Pacific Ocean. Ships travelling between Europe, the Middle East, India and East Asia naturally pass near Singapore, making it a convenient stop to refuel, restock supplies, and load or unload cargo. Because of this strategic position along major East-West trade routes, Singapore developed into a natural transshipment hub, and this location advantage helped it grow into one of the world's busiest and most important port cities."},
         ]),
         mkLesson("1.2","1.2 Diversity in Southeast Asia", [
-          {t:"Give two examples of ethnic diversity found within Southeast Asia.", m:2},
-          {t:"Name one major religion practised in Southeast Asia.", m:1},
-          {t:"Explain why Southeast Asia is often described as a culturally diverse region.", m:5},
+          {t:"Give two examples of ethnic diversity found within Southeast Asia.", m:2, a:"Accept any two: Malay communities found across Malaysia, Indonesia and Brunei; Chinese communities found in Singapore, Malaysia, Indonesia and Thailand; Indian communities found in Singapore and Malaysia; indigenous groups such as the Dayak in Borneo or hill tribes in Myanmar and Thailand."},
+          {t:"Name one major religion practised in Southeast Asia.", m:1, a:"Accept any one: Islam, Buddhism, Christianity, Hinduism."},
+          {t:"Explain why Southeast Asia is often described as a culturally diverse region.", m:5, a:"Southeast Asia has been shaped by centuries of trade, migration and colonisation, which brought different groups of people, languages, religions and customs into the region. Traders and settlers from India, China and the Middle East introduced Hinduism, Buddhism and Islam, while European colonisation later brought Christianity and Western influences. As a result, the region is home to many ethnic groups, such as Malay, Chinese, Indian and various indigenous communities, who each practise their own religions, languages, food and traditions. This long history of interaction and exchange, rather than one single dominant culture, is why Southeast Asia is considered a highly culturally diverse region."},
         ]),
         mkLesson("1.3","1.3 Connections between Singapore and Southeast Asia", [
-          {t:"Name one regional organisation that connects Singapore with its Southeast Asian neighbours.", m:1},
-          {t:"Describe one way Singapore is economically connected to Southeast Asia.", m:5},
-          {t:"Explain how transport links have strengthened ties between Singapore and the rest of Southeast Asia.", m:10},
+          {t:"Name one regional organisation that connects Singapore with its Southeast Asian neighbours.", m:1, a:"ASEAN (the Association of Southeast Asian Nations)."},
+          {t:"Describe one way Singapore is economically connected to Southeast Asia.", m:5, a:"Singapore trades extensively with its Southeast Asian neighbours, importing raw materials and food (such as produce from Malaysia and Indonesia) and exporting manufactured goods and financial or business services in return. Many Singapore-based companies also invest in and operate in neighbouring countries such as Malaysia, Indonesia and Vietnam, while workers and businesspeople travel regularly between Singapore and the region for work. As a member of ASEAN, Singapore also benefits from reduced trade barriers with other Southeast Asian countries, further strengthening these economic ties."},
+          {t:"Explain how transport links have strengthened ties between Singapore and the rest of Southeast Asia.", m:10, a:"Singapore is connected to the rest of Southeast Asia through several transport links. Land links, such as the Causeway and Second Link bridges to Malaysia, let people, vehicles and goods travel easily between the two countries every day for work, school, trade and family visits. Sea links, through the Port of Singapore, one of the busiest container ports in the world, connect Singapore to ports throughout the region, supporting trade with countries such as Indonesia, Vietnam and Thailand. Air links through Changi Airport connect Singapore to major Southeast Asian cities with frequent, affordable flights, making it easy for tourists, students and businesspeople to travel between countries. Together, these transport links have made it faster, cheaper and easier for people, goods and ideas to move between Singapore and its neighbours, strengthening economic ties through trade and investment, social ties through family connections and labour movement, and cultural ties through tourism and shared experiences, helping the region grow more closely interconnected over time."},
         ]),
       ]),
       mkChapter("ch2","Chapter 2: Understanding Features and Legacies of Civilisations", [
@@ -919,6 +923,20 @@ async function viewQBank(){
   '<button class="btn btn-outline" onclick="goto(\'customQ\')">Start Writing</button></div>'+
   '<div class="card"><h2 style="margin-top:0;color:var(--ink);">'+lesson.title+'</h2><div class="qmeta" style="margin-bottom:10px;">'+lesson.questions.length+' practice questions</div>'+rows.join("")+'</div>';
 }
+// After a completed (full-marks) question, jump straight to the next question in the
+// same lesson for momentum. Falls back to the question list if there's no next question
+// (last question in the lesson) or if this was a custom (self-authored) question.
+function goToNextQuestion(){
+  const q = state.currentQuestion;
+  const lesson = window.__lessonForBank;
+  if(!q.custom && lesson && lesson.questions){
+    const idx = parseInt(q.id, 10);
+    if(!isNaN(idx) && idx+1 < lesson.questions.length){
+      return selectBankQuestion(idx+1);
+    }
+  }
+  goto("qbank");
+}
 function selectBankQuestion(idx){
   const lesson = window.__lessonForBank;
   const q = lesson.questions[idx];
@@ -1187,9 +1205,28 @@ async function submitThinkingReply(){
 function viewFeedback(){
   const q = state.currentQuestion, fb = state.feedback;
   const pct = fb.score / q.m;
+  const isComplete = fb.score >= q.m; // full marks = the question is considered complete, not "still improvable"
   const saveBtn = (pct >= 0.75)
     ? '<button class="btn btn-outline" onclick="addToVault()">⭐ Add to ScholarVault</button>'
     : '<span class="qmeta" style="align-self:center;">Score 75%+ to save to ScholarVault</span>';
+
+  // Full marks: no "Next Steps" (there is nothing left to strengthen), and no invitation back
+  // into another improvement loop — a clear completion banner replaces it instead.
+  const nextStepsOrCompletionBlock = isComplete
+    ? '<div class="completion-block"><h3>🎉 Full Marks — Question Completed!</h3><p>You wrote a complete, well-reasoned answer. Nice work.</p></div>'
+    : '<div class="fb-block"><h4>↗ Next Steps to Strengthen Your Answer</h4><ul class="fb-list next">'+fb.nextSteps.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>';
+
+  const actionButtons = isComplete
+    ? '<div class="row">'+
+        '<button class="btn btn-ghost" onclick="goto(\'improve\')">Retry Question</button>'+
+        saveBtn+
+        '<button class="btn btn-primary" onclick="goToNextQuestion()">Next Question →</button>'+
+      '</div>'
+    : '<div class="row">'+
+        saveBtn+
+        '<button class="btn btn-primary" onclick="goto(\'improve\')">Retry Question</button>'+
+      '</div>';
+
   return '<div class="crumb"><b>'+LEVEL_LABEL[q.level]+'</b> › <b>'+SUBJECT_META[q.subjectKey].name+'</b> › <b>'+q.lessonTitle+'</b></div>'+
   '<div class="card">'+
     '<h1 class="title">Your Performance Feedback</h1>'+
@@ -1203,7 +1240,7 @@ function viewFeedback(){
       '<div class="scoretext">Estimated Score<br><b>'+fb.score+' / '+q.m+'</b> Marks</div>'+
     '</div>'+
     '<div class="fb-block"><h4>✅ Strengths</h4><ul class="fb-list ok">'+fb.strengths.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>'+
-    '<div class="fb-block"><h4>↗ Next Steps to Strengthen Your Answer</h4><ul class="fb-list next">'+fb.nextSteps.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>'+
+    nextStepsOrCompletionBlock+
     ((fb.learningReceipt && fb.learningReceipt.length) ?
       '<hr class="receipt-divider">'+
       '<div class="receipt-block"><h4>🌱 Today\'s Learning</h4><ul class="receipt-list">'+fb.learningReceipt.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>'
@@ -1213,10 +1250,7 @@ function viewFeedback(){
         '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
         '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
       '</div>'+
-      '<div class="row">'+
-        saveBtn+
-        '<button class="btn btn-primary" onclick="goto(\'improve\')">Retry Question</button>'+
-      '</div>'+
+      actionButtons+
     '</div>'+
   '</div>';
 }
@@ -1466,6 +1500,8 @@ window.submitAnswer = submitAnswer; window.addToVault = addToVault; window.submi
 window.toggleVaultSel = toggleVaultSel; window.downloadPDF = downloadPDF; window.chooseLevel = chooseLevel; window.state = state;
 window.enterAsStudent = enterAsStudent; window.enterAsTeacher = enterAsTeacher; window.switchToTeacher = switchToTeacher; window.switchToStudent = switchToStudent;
 window.submitThinkingReply = submitThinkingReply;
+window.goToNextQuestion = goToNextQuestion;
+window.LEVELS = LEVELS; window.SUBJECT_META = SUBJECT_META; window.LEVEL_LABEL = LEVEL_LABEL;
 
 (async function init(){
   try{
