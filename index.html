@@ -1,5 +1,6 @@
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -504,7 +505,14 @@ const LEVELS = {
 /* ---------- State ---------- */
 let state = { view:"entry", level:null, subjectKey:null, lessonId:null, currentQuestion:null,
   answerDraft:"", feedback:null, loading:false, validating:false, error:null, toast:null, vault:[], selectedVaultIds:[],
-  thinkingTurn:0, thinkingHistory:[], thinkingHistoryQid:null, questionDemand:null, usedClarification:false, awaitingFinalAnswer:false };
+  thinkingTurn:0, thinkingHistory:[], thinkingHistoryQid:null, questionDemand:null, usedClarification:false, awaitingFinalAnswer:false,
+  thinkingDraft:"", improveDraft:"" };
+
+// Bumped on every navigation (goto/popstate) and captured at the start of every submission.
+// A submit function checks its own captured id against this after each await; if they no
+// longer match, the user has navigated away (or started something newer) and the response
+// is stale — it's dropped instead of overwriting whatever screen is now showing.
+let requestSeq = 0;
 
 /* ---------- Storage helpers (browser localStorage — per-device, no account system yet) ---------- */
 function sGet(key){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
@@ -719,9 +727,11 @@ function stateSnapshot(){
   return { view: state.view, level: state.level, subjectKey: state.subjectKey, lessonId: state.lessonId,
     currentQuestion: state.currentQuestion, answerDraft: state.answerDraft, feedback: state.feedback,
     thinkingTurn: state.thinkingTurn, thinkingHistory: state.thinkingHistory, thinkingHistoryQid: state.thinkingHistoryQid, questionDemand: state.questionDemand,
-    usedClarification: state.usedClarification, awaitingFinalAnswer: state.awaitingFinalAnswer };
+    usedClarification: state.usedClarification, awaitingFinalAnswer: state.awaitingFinalAnswer,
+    thinkingDraft: state.thinkingDraft, improveDraft: state.improveDraft };
 }
 function goto(view, extra){
+  requestSeq++; // invalidate any in-flight request from the screen we're leaving
   state.view = view; Object.assign(state, extra||{}); state.error = null;
   if(view === "qbank" && state.lessonId){ saveLastLesson(state.level, state.subjectKey, state.lessonId); }
   try{ history.pushState(stateSnapshot(), "", "#"+view); }catch(e){ /* history API unavailable in this context (e.g. sandboxed preview) — continue without it */ }
@@ -729,6 +739,7 @@ function goto(view, extra){
 }
 window.addEventListener("popstate", (e)=>{
   if(e.state){
+    requestSeq++; // same as goto() — leaving the current screen invalidates any pending request
     Object.assign(state, e.state);
     state.error = null; state.loading = false; state.validating = false;
     render();
@@ -915,6 +926,7 @@ function selectBankQuestion(idx){
   state.answerDraft = "";
   state.thinkingTurn = 0; state.thinkingHistory = []; state.thinkingHistoryQid = null;
   state.questionDemand = null; state.usedClarification = false; state.awaitingFinalAnswer = false;
+  state.thinkingDraft = ""; state.improveDraft = "";
   goto("answer");
 }
 
@@ -934,20 +946,23 @@ function viewCustomQ(){
         '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
         '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
       '</div>'+
-      '<button class="btn btn-primary" onclick="startCustom()">'+(state.validating?"Checking…":"Start Writing")+'</button>'+
+      '<button class="btn btn-primary" onclick="startCustom()"'+(state.validating?' disabled':'')+'>'+(state.validating?"Checking…":"Start Writing")+'</button>'+
     '</div>'+
     (state.validating? '<div class="loading"><div class="spinner"></div>Ethixo is checking your question…</div>':"")+
   '</div>';
 }
 async function startCustom(){
+  if(state.validating) return; // double-submit protection
   const t = document.getElementById("customText").value.trim();
   if(!t){ toast("Please type a question first"); return; }
   const m = parseInt(document.getElementById("marksSlider").value,10);
   state.customDraft = t; state.customMarks = m;
   const lesson = findLesson();
   state.validating = true; state.error = null; render();
+  const myRequestId = ++requestSeq;
   try{
     const check = await validateCustomQuestion(SUBJECT_META[state.subjectKey].name, lesson.title, t);
+    if(myRequestId !== requestSeq) return; // user navigated away — drop this stale response
     state.validating = false;
     if(!check.ok){
       state.error = check.message || "Please adjust your question and try again.";
@@ -958,8 +973,10 @@ async function startCustom(){
     state.answerDraft = ""; state.customDraft = ""; state.error = null;
     state.thinkingTurn = 0; state.thinkingHistory = []; state.thinkingHistoryQid = null;
     state.questionDemand = null; state.usedClarification = false; state.awaitingFinalAnswer = false;
+    state.thinkingDraft = ""; state.improveDraft = "";
     goto("answer");
   }catch(e){
+    if(myRequestId !== requestSeq) return;
     state.validating = false;
     state.error = "Couldn't check your question right now. ("+e.message+")";
     render();
@@ -974,19 +991,20 @@ function viewAnswer(){
     '<h1 class="title">Write your Best Answer</h1>'+
     '<p class="qmeta" style="font-size:13px;">'+q.m+' Mark'+(q.m>1?"s":"")+'</p>'+
     '<p style="font-weight:700;color:var(--ink);font-size:16px;">'+q.t+'</p>'+
-    '<textarea id="answerBox" placeholder="Type your answer here (in English)…">'+state.answerDraft+'</textarea>'+
+    '<textarea id="answerBox" placeholder="Type your answer here (in English)…" oninput="state.answerDraft=this.value">'+state.answerDraft+'</textarea>'+
     (state.error? '<div class="errbox">'+state.error+' <a href="#" onclick="event.preventDefault();submitAnswer()">Try again</a></div>':"")+
     '<div class="row between" style="margin-top:18px;">'+
       '<div class="row">'+
         '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
         '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
       '</div>'+
-      '<button class="btn btn-primary" id="reviewBtn" onclick="submitAnswer()">'+(state.loading? "Reviewing…":"Review My Answer")+'</button>'+
+      '<button class="btn btn-primary" id="reviewBtn" onclick="submitAnswer()"'+(state.loading?' disabled':'')+'>'+(state.loading? "Reviewing…":"Review My Answer")+'</button>'+
     '</div>'+
     (state.loading? '<div class="loading"><div class="spinner"></div>Ethixo is reading your answer…</div>':"")+
   '</div>';
 }
 async function submitAnswer(){
+  if(state.loading) return; // double-submit protection: ignore repeated clicks while a request is pending
   const box = document.getElementById("answerBox");
   const ans = box.value.trim();
   if(!ans){ toast("Write an answer first"); return; }
@@ -1006,18 +1024,23 @@ async function submitAnswer(){
   state.questionDemand = null;
   state.usedClarification = false;
   state.awaitingFinalAnswer = false;
+  state.thinkingDraft = "";
   state.loading = true; render();
+  const myRequestId = ++requestSeq;
   try{
     const result = await callThinkingTurn(ans);
+    if(myRequestId !== requestSeq) return; // user navigated away — drop this stale response
     state.loading = false;
     await handleThinkingResult(ans, result);
   }catch(e){
+    if(myRequestId !== requestSeq) return;
     state.loading = false; state.error = "Couldn't reach Ethixo's thinking coach right now. ("+e.message+")"; render();
   }
 }
 
 async function submitAnswerDirect(ans){
   state.loading = true; state.error=null; render();
+  const myRequestId = ++requestSeq;
   try{
     const q = state.currentQuestion;
     const priorAttempts = (await sGet(qKey(q))) || [];
@@ -1026,6 +1049,7 @@ async function submitAnswerDirect(ans){
     // in as false evidence — see milestone report).
     const thinkingEvidence = (state.thinkingHistoryQid === qKey(q)) ? state.thinkingHistory : [];
     const fb = await getAIFeedback(q.t, q.m, ans, q.a, thinkingEvidence, priorAttempts);
+    if(myRequestId !== requestSeq) return; // user navigated away — drop this stale response
     state.loading=false;
     if(fb.languageError){
       state.error = fb.message || "Please write your answer in English.";
@@ -1035,12 +1059,14 @@ async function submitAnswerDirect(ans){
     state.feedback = fb;
     priorAttempts.push({ answer:ans, score:fb.score, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
     await sSet(qKey(q), priorAttempts);
+    if(myRequestId !== requestSeq) return; // re-check: navigation could have happened during the sSet await too
     // Thinking Cycle evidence has now been consumed (or was never relevant) — clear it so it
     // can never be mistaken for evidence belonging to a different question later.
     state.thinkingHistory = []; state.thinkingHistoryQid = null; state.thinkingTurn = 0;
-    state.usedClarification = false; state.awaitingFinalAnswer = false;
+    state.usedClarification = false; state.awaitingFinalAnswer = false; state.thinkingDraft = ""; state.improveDraft = "";
     goto("feedback");
   }catch(e){
+    if(myRequestId !== requestSeq) return;
     state.loading=false; state.error="Couldn't reach Ethixo's AI coach right now. ("+e.message+")"; render();
   }
 }
@@ -1118,22 +1144,24 @@ function viewThinking(){
     '<p class="turnbadge">'+q.m+' Mark'+(q.m>1?"s":"")+' · '+(finalMode? 'Write your final answer below' : 'Thinking Turn '+state.thinkingTurn+' of 3')+'</p>'+
     '<p style="font-weight:700;color:var(--ink);font-size:15px;margin-top:8px;">'+q.t+'</p>'+
     '<div class="chatlog">'+history+'</div>'+
-    '<textarea id="thinkingBox" placeholder="'+(finalMode? 'Type your final answer here…' : 'Type your response here…')+'"></textarea>'+
+    '<textarea id="thinkingBox" placeholder="'+(finalMode? 'Type your final answer here…' : 'Type your response here…')+'" oninput="state.thinkingDraft=this.value">'+(state.thinkingDraft||"")+'</textarea>'+
     (state.error? '<div class="errbox">'+state.error+'</div>':"")+
     '<div class="row between" style="margin-top:18px;">'+
       '<div class="row">'+
         '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
         '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
       '</div>'+
-      '<button class="btn btn-primary" onclick="submitThinkingReply()">'+(state.loading?(finalMode?"Submitting…":"Thinking…"):(finalMode?"Submit Final Answer":"Send"))+'</button>'+
+      '<button class="btn btn-primary" onclick="submitThinkingReply()"'+(state.loading?' disabled':'')+'>'+(state.loading?(finalMode?"Submitting…":"Thinking together…"):(finalMode?"Submit Final Answer":"Send"))+'</button>'+
     '</div>'+
-    (state.loading? '<div class="loading"><div class="spinner"></div>'+(finalMode?"Ethixo is reading your final answer…":"Ethixo is thinking…")+'</div>':"")+
+    (state.loading? '<div class="loading"><div class="spinner"></div>'+(finalMode?"Ethixo is reading your final answer…":"Thinking together…")+'</div>':"")+
   '</div>';
 }
 async function submitThinkingReply(){
+  if(state.loading) return; // double-submit protection
   const box = document.getElementById("thinkingBox");
   const reply = box.value.trim();
   if(!reply){ toast("Type a response first"); return; }
+  state.thinkingDraft = reply; // save immediately — if the request fails below, this stays in the box
   if(state.awaitingFinalAnswer){
     // Turns are exhausted (or resolved) and the student has now read Ethixo's last message —
     // this reply is their real final answer. Grade it directly, no further thinking.js call.
@@ -1141,11 +1169,15 @@ async function submitThinkingReply(){
     return submitAnswerDirect(reply);
   }
   state.loading = true; state.error = null; render();
+  const myRequestId = ++requestSeq;
   try{
     const result = await callThinkingTurn(reply);
+    if(myRequestId !== requestSeq) return; // user navigated away — drop this stale response
     state.loading = false;
+    state.thinkingDraft = ""; // this reply has been handled — next turn starts with a blank box
     await handleThinkingResult(reply, result);
   }catch(e){
+    if(myRequestId !== requestSeq) return;
     state.loading = false; state.error = "Couldn't reach Ethixo's thinking coach right now. ("+e.message+")"; render();
   }
 }
@@ -1225,38 +1257,44 @@ async function viewImprove(){
     '<p style="font-weight:700;color:var(--ink);">'+q.t+'</p>'+
     '<div class="history">'+(hist || '<span class="qmeta">No attempts yet</span>')+'</div>'+
     '<label class="field">Your improved answer</label>'+
-    '<textarea id="improveBox" placeholder="Type your answer here (in English)…"></textarea>'+
+    '<textarea id="improveBox" placeholder="Type your answer here (in English)…" oninput="state.improveDraft=this.value">'+(state.improveDraft||"")+'</textarea>'+
     (state.error? '<div class="errbox">'+state.error+'</div>':"")+
     '<div class="row between" style="margin-top:18px;">'+
       '<div class="row">'+
         '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
         '<button class="btn btn-ghost" onclick="goto(\'subject\')">Change Subject</button>'+
       '</div>'+
-      '<button class="btn btn-primary" onclick="submitImprove()">'+(state.loading?"Reviewing…":"Submit My New Answer")+'</button>'+
+      '<button class="btn btn-primary" onclick="submitImprove()"'+(state.loading?' disabled':'')+'>'+(state.loading?"Reviewing…":"Submit My New Answer")+'</button>'+
     '</div>'+
     (state.loading? '<div class="loading"><div class="spinner"></div>Ethixo is reading your answer…</div>':"")+
   '</div>';
 }
 async function submitImprove(){
+  if(state.loading) return; // double-submit protection
   const box = document.getElementById("improveBox");
   const ans = box.value.trim();
   if(!ans){ toast("Write an answer first"); return; }
+  state.improveDraft = ans; // save immediately — preserved in the box if the request below fails
   state.loading=true; state.error=null; render();
+  const myRequestId = ++requestSeq;
   try{
     const q = state.currentQuestion;
     const priorAttempts = (await sGet(qKey(q))) || [];
     const fb = await getAIFeedback(q.t, q.m, ans, q.a, [], priorAttempts);
+    if(myRequestId !== requestSeq) return; // user navigated away — drop this stale response
     state.loading=false;
     if(fb.languageError){
       state.error = fb.message || "Please write your answer in English.";
       render();
       return;
     }
-    state.feedback = fb; state.answerDraft = ans;
+    state.feedback = fb; state.answerDraft = ans; state.improveDraft = "";
     priorAttempts.push({ answer:ans, score:fb.score, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
     await sSet(qKey(q), priorAttempts);
+    if(myRequestId !== requestSeq) return;
     goto("feedback");
   }catch(e){
+    if(myRequestId !== requestSeq) return;
     state.loading=false; state.error="Couldn't reach Ethixo's AI coach right now. ("+e.message+")"; render();
   }
 }
