@@ -4,6 +4,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -101,6 +102,10 @@
 
   .journey-card-refined{position:relative;border-radius:var(--card-radius);overflow:hidden;margin-bottom:var(--ds-lg);box-shadow:0 2px 8px rgba(24,36,32,.06),0 24px 48px -16px rgba(14,58,38,.32);background:#EAF3EC;}
   .journey-hero-img{display:block;width:100%;height:auto;max-width:1400px;aspect-ratio:2/1;object-fit:cover;margin:0 auto;}
+  .journey-title-overlay{position:absolute;left:0;top:0;padding:28px 32px;max-width:58%;pointer-events:none;}
+  .journey-title-overlay .jt-title{font-size:28px;font-weight:800;color:#fff;line-height:1.18;margin:0 0 7px;letter-spacing:-.3px;text-shadow:0 1px 3px rgba(0,0,0,.5),0 6px 18px rgba(0,0,0,.32);}
+  .journey-title-overlay .jt-sub{font-size:15px;font-weight:600;color:#fff;line-height:1.4;margin:0;max-width:300px;text-shadow:0 1px 2px rgba(0,0,0,.45),0 4px 14px rgba(0,0,0,.3);}
+  @media(max-width:560px){.journey-title-overlay{padding:18px 20px;max-width:80%;}.journey-title-overlay .jt-title{font-size:20px;}.journey-title-overlay .jt-sub{font-size:12.5px;max-width:220px;}}
   .journey-overlay{position:absolute;left:0;right:0;bottom:0;padding:26px 30px;display:flex;justify-content:flex-end;background:linear-gradient(0deg,rgba(10,26,18,.42),rgba(10,26,18,0) 65%);}
   .journey-cta-refined{background:rgba(255,255,255,.96);color:var(--brand-deep);border:none;border-radius:13px;padding:14px 24px;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 8px 22px rgba(4,44,29,.26);transition:transform .12s,background .12s;}
   .journey-cta-refined:hover{background:#fff;transform:translateY(-1px);}
@@ -1505,12 +1510,35 @@ function viewPlans(){
   '</div>';
 }
 
-/* ---- Dashboard: hero illustration — production asset (assets/hero-default-production.webp),
-   loaded as a normal static file so the browser can cache it; never base64-embedded. Natural
-   size is 1400x700 (2:1) — the CSS aspect-ratio below matches that exactly and caps max-width
-   at the natural resolution so it is never upscaled. ---- */
-function journeyHeroImage(){
-  return '<img class="journey-hero-img" src="assets/hero-default-production.webp" width="1400" height="700" alt="A student stands at a mountain overlook at sunrise, backpack on, looking toward a flag at the summit — a signpost beside them marks ideas, learning, growth and progress along the path." loading="eager" decoding="async">';
+/* ---- Ethixo's standard Hero card component ----
+   This is the standard layout for ALL Ethixo Hero illustrations going forward:
+   top-left title + one-line supporting sentence (white text, shadow only — no
+   background box, no gradient scrim, artwork stays fully visible), and an
+   optional bottom-right CTA button (existing dark gradient scrim, unchanged).
+   Takes the image + copy + CTA as parameters so future Hero artwork can reuse
+   this exact same structure by simply calling it with different values.
+   opts: { src, w, h, alt, title, subtitle, ctaLabel, ctaOnclick } — ctaLabel/
+   ctaOnclick are optional; omit both to render the image+text with no CTA. */
+function renderHeroCard(opts){
+  const cta = opts.ctaLabel
+    ? '<div class="journey-overlay"><button class="journey-cta-refined" onclick="'+opts.ctaOnclick+'">'+opts.ctaLabel+'</button></div>'
+    : "";
+  return '<div class="journey-card-refined">'+
+    '<img class="journey-hero-img" src="'+opts.src+'" width="'+opts.w+'" height="'+opts.h+'" alt="'+opts.alt+'" loading="eager" decoding="async">'+
+    '<div class="journey-title-overlay"><div class="jt-title">'+opts.title+'</div><div class="jt-sub">'+opts.subtitle+'</div></div>'+
+    cta+
+  '</div>';
+}
+/* Ethixo's current default Hero illustration (assets/hero-default-production.webp, 1400x700,
+   loaded as a normal static file — never base64 — so the browser can cache it). */
+function defaultHeroCard(ctaLabel, ctaOnclick){
+  return renderHeroCard({
+    src: "assets/hero-default-production.webp", w: 1400, h: 700,
+    alt: "A student stands at a mountain overlook at sunrise, backpack on, looking toward a flag at the summit — a signpost beside them marks ideas, learning, growth and progress along the path.",
+    title: "Your Learning Journey",
+    subtitle: "Every answer moves you one step forward.",
+    ctaLabel: ctaLabel, ctaOnclick: ctaOnclick,
+  });
 }
 
 /* ---------- Dashboard data provider ----------
@@ -1618,7 +1646,7 @@ function viewDashboard(){
       '<div class="dash-welcome-refined">'+wenboAvatar(64)+
         '<div><h1>Welcome, Wenbo!</h1><p>Let\'s get started on becoming a stronger learner.</p></div>'+
       '</div>'+
-      '<div class="journey-card-refined">'+journeyHeroImage()+'</div>'+
+      defaultHeroCard()+
       '<div class="dash-empty-refined">'+
         '<h3>🌱 You\'re just getting started</h3>'+
         '<p>Answer a few questions and Ethixo will start noticing how you learn.</p>'+
@@ -1649,9 +1677,7 @@ function viewDashboard(){
     '<div class="dash-welcome-refined">'+wenboAvatar(64)+
       '<div><h1>Welcome back, Wenbo!</h1><p>This term, you\'re becoming a stronger learner.</p></div>'+
     '</div>'+
-    '<div class="journey-card-refined">'+journeyHeroImage()+
-      '<div class="journey-overlay"><button class="journey-cta-refined" onclick="goto(\'journey\')">View My Learning Journey →</button></div>'+
-    '</div>'+
+    defaultHeroCard("View My Learning Journey →", "goto('journey')")+
     '<div class="noticed-card-refined">'+
       '<div class="noticed-head"><span class="nh-badge">👀</span><h3>Ethixo Noticed</h3></div>'+
       '<div class="noticed-list">'+noticedHtml+'</div>'+
