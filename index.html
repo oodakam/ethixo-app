@@ -32,8 +32,9 @@
   .logo{font-weight:800;font-size:27px;color:var(--brand);letter-spacing:-.5px;cursor:pointer;}
   .badge{font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:3px 11px;background:var(--card);font-weight:600;}
   .topbtns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
-  .vault-link{border:1.5px solid var(--brand);color:var(--brand-deep);background:#fff;border-radius:11px;padding:8px 15px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;}
-  .vault-link:hover{background:var(--brand-light);}
+  .vault-link{border:none;color:var(--muted);background:transparent;border-radius:10px;padding:9px 15px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;transition:background .12s,color .12s;}
+  .vault-link:hover{background:var(--panel);color:var(--ink);}
+  .vault-link.active{background:var(--brand-light);color:var(--brand-deep);}
   .crumb{color:var(--muted);font-size:13.5px;margin-bottom:18px;font-weight:500;}
   .crumb b{color:var(--ink);}
   .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px;}
@@ -90,44 +91,69 @@
   .spinner{width:18px;height:18px;border:3px solid var(--border);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
 
-  /* ---- Student Dashboard (MVP redesign) ---- */
-  .dash-welcome{display:flex;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap;}
-  .dash-welcome h1{margin:0 0 2px;font-size:24px;color:var(--ink);}
-  .dash-welcome p{margin:0;color:var(--muted);font-size:14.5px;}
-  .journey-card{position:relative;border-radius:16px;overflow:hidden;margin-bottom:20px;box-shadow:var(--shadow);}
-  .journey-card svg{display:block;width:100%;height:auto;}
-  .journey-cta{position:absolute;right:16px;bottom:16px;}
-  .dash-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px;}
-  @media(max-width:640px){.dash-grid3{grid-template-columns:1fr;}}
-  .mini-card{border-radius:16px;padding:18px 18px 16px;border:1px solid var(--border);}
-  .mini-card.tint-green{background:var(--brand-light);border-color:var(--brand-light-b);}
-  .mini-card.tint-blue{background:#E3EEFB;border-color:#c7ddf5;}
-  .mini-card.tint-amber{background:var(--amber-bg);border-color:#efd6a4;}
-  .mini-card .mc-big{font-size:15.5px;font-weight:700;color:var(--ink);line-height:1.35;margin:2px 0 10px;}
-  .mini-card a.mc-view{font-size:13px;font-weight:700;color:var(--brand-deep);text-decoration:none;}
-  .mini-card a.mc-view:hover{text-decoration:underline;}
-  .noticed-card{background:var(--brand-light);border:1px solid var(--brand-light-b);border-radius:16px;padding:18px 20px;margin-bottom:14px;}
-  .noticed-card h3{margin:0 0 12px;font-size:15px;color:var(--brand-deep);}
-  .noticed-item{display:flex;gap:10px;padding:7px 0;font-size:14px;color:var(--muted);line-height:1.4;}
-  .noticed-item.new{color:var(--brand-deep);font-weight:700;}
-  .noticed-item::before{content:"•";flex:none;}
-  .examready-card{border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin-bottom:14px;}
-  .examready-card h3{margin:0 0 4px;font-size:15px;color:var(--ink);}
-  .examready-card p.hint{margin:0 0 12px;color:var(--muted);font-size:13px;}
-  .examready-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:14px;font-weight:600;color:var(--ink);}
-  .examready-row:last-of-type{border-bottom:none;}
-  .examready-row span.cnt{color:var(--brand-deep);font-weight:800;}
-  .nextstep-card{background:var(--amber-bg);border:1px solid #efd6a4;border-radius:16px;padding:20px 22px;margin-bottom:14px;}
-  .nextstep-card h3{margin:0 0 10px;font-size:15px;color:#8a5c14;}
-  .nextstep-card .ns-text{font-size:17px;font-weight:700;color:var(--ink);margin-bottom:14px;}
-  .dash-empty{background:var(--brand-light);border:1px solid var(--brand-light-b);border-radius:16px;padding:26px 22px;text-align:center;margin-bottom:14px;}
-  .dash-empty h3{margin:0 0 6px;color:var(--brand-deep);font-size:17px;}
-  .dash-empty p{margin:0 0 16px;color:var(--ink);font-size:14px;}
-  .learned-subject{margin-bottom:20px;}
-  .learned-subject h3{margin:0 0 8px;color:var(--ink);font-size:15.5px;}
-  .learned-item{display:flex;gap:8px;padding:5px 0;font-size:14px;color:var(--ink);}
+  /* ---- Student Dashboard (premium visual pass) ---- */
+  .dash-shell{--ds-xs:8px; --ds-sm:16px; --ds-md:26px; --ds-lg:40px;}
+  .dash-welcome-refined{display:flex;align-items:center;gap:18px;margin-bottom:var(--ds-md);}
+  .dash-welcome-refined .dw-avatar{flex:none;}
+  .dash-welcome-refined h1{margin:0 0 4px;font-size:29px;font-weight:800;color:var(--ink);letter-spacing:-.3px;}
+  .dash-welcome-refined p{margin:0;color:var(--muted);font-size:15px;}
+  .journey-card-refined{position:relative;border-radius:22px;overflow:hidden;margin-bottom:var(--ds-lg);box-shadow:0 2px 8px rgba(24,36,32,.05),0 18px 40px -12px rgba(14,58,38,.28);}
+  .journey-card-refined svg{display:block;width:100%;height:auto;}
+  .journey-overlay{position:absolute;left:0;right:0;bottom:0;padding:22px 26px;display:flex;justify-content:flex-end;background:linear-gradient(0deg,rgba(6,30,20,.38),rgba(6,30,20,0) 70%);}
+  .journey-cta-refined{background:#fff;color:var(--brand-deep);border:none;border-radius:13px;padding:13px 22px;font-weight:700;font-size:14.5px;cursor:pointer;box-shadow:0 6px 18px rgba(4,44,29,.22);}
+  .journey-cta-refined:hover{background:var(--brand-light);}
+
+  .noticed-card-refined{background:linear-gradient(155deg,var(--brand-light),#fff 78%);border:1px solid var(--brand-light-b);border-radius:20px;padding:26px 28px;margin-bottom:var(--ds-md);}
+  .noticed-head{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+  .noticed-head .nh-badge{width:34px;height:34px;border-radius:10px;background:var(--brand);display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 4px 10px rgba(0,168,107,.28);}
+  .noticed-head h3{margin:0;font-size:16.5px;font-weight:800;color:var(--brand-deep);}
+  .noticed-list{display:flex;flex-direction:column;gap:2px;}
+  .noticed-item-refined{display:flex;align-items:flex-start;gap:12px;padding:10px 0;font-size:14.5px;color:var(--ink);line-height:1.45;border-top:1px solid rgba(4,107,74,.08);}
+  .noticed-item-refined:first-child{border-top:none;}
+  .noticed-item-refined .ni-mark{flex:none;width:20px;height:20px;border-radius:50%;background:var(--brand-light-b);color:var(--brand-deep);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:1px;}
+  .noticed-item-refined.new .ni-mark{background:var(--brand);color:#fff;}
+  .noticed-item-refined .ni-badge{flex:none;background:var(--brand);color:#fff;font-size:10px;font-weight:800;letter-spacing:.04em;padding:2px 8px;border-radius:20px;margin-left:auto;text-transform:uppercase;}
+
+  .growth-row{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--ds-sm);margin-bottom:var(--ds-md);}
+  @media(max-width:640px){.growth-row{grid-template-columns:1fr;}}
+  .growth-card{border-radius:20px;padding:22px 22px 20px;border:1px solid var(--border);display:flex;flex-direction:column;gap:2px;}
+  .growth-card.tint-green{background:var(--brand-light);border-color:var(--brand-light-b);}
+  .growth-card.tint-blue{background:#E3EEFB;border-color:#c7ddf5;}
+  .growth-card.tint-amber{background:var(--amber-bg);border-color:#efd6a4;}
+  .growth-card .gc-icon{width:38px;height:38px;border-radius:11px;background:rgba(255,255,255,.65);display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:14px;}
+  .growth-card .gc-number{font-size:34px;font-weight:800;color:var(--ink);line-height:1;letter-spacing:-.5px;}
+  .growth-card .gc-label{font-size:13px;color:var(--muted);margin:6px 0 16px;line-height:1.4;}
+  .growth-card a.gc-view{font-size:13px;font-weight:700;color:var(--brand-deep);text-decoration:none;margin-top:auto;}
+  .growth-card a.gc-view:hover{text-decoration:underline;}
+
+  .examready-card-refined{background:linear-gradient(155deg,#FFF9EC,#fff 70%);border:1px solid #f3e3bd;border-radius:20px;padding:26px 28px;margin-bottom:var(--ds-md);}
+  .examready-card-refined .er-head{display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+  .examready-card-refined .er-head .er-badge{width:34px;height:34px;border-radius:10px;background:var(--amber);display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 4px 10px rgba(201,130,31,.28);}
+  .examready-card-refined h3{margin:0;font-size:16.5px;font-weight:800;color:#8a5c14;}
+  .examready-card-refined p.hint{margin:4px 0 18px;color:var(--muted);font-size:13.5px;}
+  .er-row{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:13px;background:rgba(255,255,255,.6);margin-bottom:8px;}
+  .er-row .er-icon{flex:none;width:30px;height:30px;border-radius:9px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;}
+  .er-row .er-name{flex:1;font-size:14.5px;font-weight:700;color:var(--ink);}
+  .er-row .er-count{font-size:17px;font-weight:800;color:#8a5c14;}
+  .examready-card-refined a.er-viewall{display:inline-block;margin-top:10px;font-size:13.5px;font-weight:700;color:#8a5c14;text-decoration:none;}
+  .examready-card-refined a.er-viewall:hover{text-decoration:underline;}
+
+  .nextstep-card-refined{background:linear-gradient(135deg,var(--brand-deep),var(--brand));border-radius:22px;padding:30px 30px 28px;margin-bottom:var(--ds-xs);color:#fff;position:relative;overflow:hidden;}
+  .nextstep-card-refined::after{content:"";position:absolute;right:-40px;top:-40px;width:160px;height:160px;border-radius:50%;background:rgba(255,255,255,.07);}
+  .nextstep-card-refined .ns-eyebrow{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.78);margin-bottom:14px;}
+  .nextstep-card-refined .ns-text{font-size:22px;font-weight:800;line-height:1.3;margin-bottom:22px;max-width:90%;position:relative;}
+  .nextstep-card-refined .btn-nextstep{background:#fff;color:var(--brand-deep);border:none;border-radius:13px;padding:13px 24px;font-weight:800;font-size:14.5px;cursor:pointer;position:relative;}
+  .nextstep-card-refined .btn-nextstep:hover{background:var(--brand-light);}
+
+  .dash-empty-refined{background:linear-gradient(155deg,var(--brand-light),#fff 75%);border:1px solid var(--brand-light-b);border-radius:20px;padding:36px 28px;text-align:center;}
+  .dash-empty-refined h3{margin:0 0 8px;color:var(--brand-deep);font-size:19px;font-weight:800;}
+  .dash-empty-refined p{margin:0 0 20px;color:var(--ink);font-size:14.5px;}
+
+  .learned-subject{margin-bottom:24px;}
+  .learned-subject h3{margin:0 0 10px;color:var(--ink);font-size:16px;font-weight:800;}
+  .learned-item{display:flex;gap:8px;padding:6px 0;font-size:14px;color:var(--ink);}
   .learned-item::before{content:"✓";color:var(--brand-deep);font-weight:800;flex:none;}
-  .detail-item{border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:10px;}
+  .detail-item{border:1px solid var(--border);border-radius:14px;padding:14px 18px;margin-bottom:11px;}
   .detail-item b{display:block;color:var(--ink);font-size:14.5px;margin-bottom:3px;}
   .detail-item span{color:var(--muted);font-size:13.5px;}
   .gaugewrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-bottom:20px;}
@@ -843,9 +869,9 @@ function topbar(){
   else if(persona === "student" && onboarded){ switchLink = '<button class="vault-link" onclick="switchToTeacher()">Switch to Teacher View</button>'; }
 
   const studentBtns = (persona==="student")
-    ? (onboarded? '<button class="vault-link" onclick="goto(\'dashboard\')">Dashboard</button>':"")+
-      '<button class="vault-link" onclick="goto(\'plans\')">Plans</button>'+
-      '<button class="vault-link" onclick="goto(\'vault\')">ScholarVault</button>'
+    ? (onboarded? '<button class="vault-link'+(state.view==="dashboard"?' active':'')+'" onclick="goto(\'dashboard\')">Dashboard</button>':"")+
+      '<button class="vault-link'+(state.view==="plans"?' active':'')+'" onclick="goto(\'plans\')">Plans</button>'+
+      '<button class="vault-link'+(state.view==="vault"?' active':'')+'" onclick="goto(\'vault\')">ScholarVault</button>'
     : "";
 
   return '<div class="topbar">'+
@@ -1476,37 +1502,78 @@ function viewPlans(){
 
 /* ---- Dashboard: mountain journey illustration (original SVG, no numbers/labels) ---- */
 function journeyMountainSVG(){
-  return '<svg viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Illustration of a student walking a winding path up a mountain toward a flag">'+
+  return '<svg viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Illustration of a student walking a winding path up a mountain toward a flag">'+
     '<defs>'+
-      '<linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">'+
-        '<stop offset="0" stop-color="#DCEEFB"/><stop offset="1" stop-color="#F3FBF7"/>'+
+      '<linearGradient id="skyGrad" x1="0" y1="0" x2="0.15" y2="1">'+
+        '<stop offset="0" stop-color="#FCEFDD"/><stop offset="0.35" stop-color="#E9F2FB"/><stop offset="1" stop-color="#F4FAF6"/>'+
       '</linearGradient>'+
       '<linearGradient id="mtnBack" x1="0" y1="0" x2="0" y2="1">'+
-        '<stop offset="0" stop-color="#BFE9D4"/><stop offset="1" stop-color="#9AD6B8"/>'+
+        '<stop offset="0" stop-color="#CFE9DE"/><stop offset="1" stop-color="#AEDCC6"/>'+
       '</linearGradient>'+
-      '<linearGradient id="mtnFront" x1="0" y1="0" x2="0" y2="1">'+
-        '<stop offset="0" stop-color="#4FAE7F"/><stop offset="1" stop-color="#0E7A4E"/>'+
+      '<linearGradient id="mtnMid" x1="0" y1="0" x2="0" y2="1">'+
+        '<stop offset="0" stop-color="#8FCDA9"/><stop offset="1" stop-color="#5FB588"/>'+
       '</linearGradient>'+
+      '<linearGradient id="mtnFront" x1="0.1" y1="0" x2="0.3" y2="1">'+
+        '<stop offset="0" stop-color="#4CAE7C"/><stop offset="1" stop-color="#0E7A4E"/>'+
+      '</linearGradient>'+
+      '<linearGradient id="groundGrad" x1="0" y1="0" x2="0" y2="1">'+
+        '<stop offset="0" stop-color="#1E8955"/><stop offset="1" stop-color="#0B5C39"/>'+
+      '</linearGradient>'+
+      '<radialGradient id="sunGlow" cx="0.5" cy="0.5" r="0.5">'+
+        '<stop offset="0" stop-color="#FFF3D6" stop-opacity="0.9"/><stop offset="1" stop-color="#FFF3D6" stop-opacity="0"/>'+
+      '</radialGradient>'+
+      '<radialGradient id="vignette" cx="0.5" cy="0.42" r="0.75">'+
+        '<stop offset="0.6" stop-color="#04241a" stop-opacity="0"/><stop offset="1" stop-color="#04241a" stop-opacity="0.16"/>'+
+      '</radialGradient>'+
     '</defs>'+
-    '<rect width="800" height="300" fill="url(#skyGrad)"/>'+
-    '<circle cx="700" cy="55" r="26" fill="#FFF6DD"/>'+
-    '<path d="M40,120 Q90,95 140,118 T260,112 T380,120 L380,220 L40,220 Z" fill="url(#mtnBack)" opacity="0.7"/>'+
-    '<path d="M160,230 L360,60 L430,140 L520,45 L760,230 Z" fill="url(#mtnFront)"/>'+
-    '<path d="M330,90 L360,60 L392,96 L372,102 L360,88 L348,104 Z" fill="#F3FBF7"/>'+
-    '<path d="M490,80 L520,45 L552,84 L532,90 L520,74 L508,92 Z" fill="#F3FBF7"/>'+
-    '<rect x="520" y="45" width="3" height="34" fill="#8a5c14"/>'+
-    '<path d="M523,45 L555,55 L523,63 Z" fill="#E2574C"/>'+
-    '<path d="M60,240 Q220,180 340,150 T560,120" fill="none" stroke="#F1E2BE" stroke-width="18" stroke-linecap="round" stroke-dasharray="1,20"/>'+
-    '<g transform="translate(150,205)">'+
-      '<circle cx="0" cy="-40" r="11" fill="#F6C9A0"/>'+
-      '<rect x="-16" y="-30" width="14" height="20" rx="6" fill="var(--brand)"/>'+
-      '<path d="M-10,-30 L4,-10" stroke="#182420" stroke-width="4" stroke-linecap="round"/>'+
-      '<path d="M-10,-30 L-22,-10" stroke="#182420" stroke-width="4" stroke-linecap="round"/>'+
-      '<path d="M-6,-10 L-12,20" stroke="#182420" stroke-width="5" stroke-linecap="round"/>'+
-      '<path d="M-6,-10 L2,20" stroke="#182420" stroke-width="5" stroke-linecap="round"/>'+
+
+    '<rect width="800" height="340" fill="url(#skyGrad)"/>'+
+    '<circle cx="655" cy="72" r="70" fill="url(#sunGlow)"/>'+
+    '<circle cx="655" cy="72" r="24" fill="#FFF6DD"/>'+
+    '<g fill="none" stroke="#B9C4CE" stroke-width="3" stroke-linecap="round" opacity="0.55">'+
+      '<path d="M120,58 q10,-9 20,0 q10,-9 20,0"/>'+
+      '<path d="M195,88 q8,-7 16,0 q8,-7 16,0"/>'+
     '</g>'+
-    '<g opacity="0.85"><ellipse cx="120" cy="70" rx="30" ry="12" fill="#fff"/><ellipse cx="145" cy="65" rx="22" ry="10" fill="#fff"/></g>'+
-    '<g opacity="0.85"><ellipse cx="640" cy="100" rx="28" ry="11" fill="#fff"/><ellipse cx="662" cy="95" rx="20" ry="9" fill="#fff"/></g>'+
+
+    '<path d="M0,150 Q120,110 260,140 T520,132 T800,150 L800,210 L0,210 Z" fill="url(#mtnBack)" opacity="0.75"/>'+
+    '<path d="M0,205 Q160,140 340,175 Q470,198 620,150 T800,175 L800,250 L0,250 Z" fill="url(#mtnMid)" opacity="0.9"/>'+
+
+    '<path d="M120,270 L330,80 L410,175 L505,70 L760,270 Z" fill="url(#mtnFront)"/>'+
+    '<path d="M295,112 L330,80 L366,120 L344,127 L330,110 L316,129 Z" fill="#FBFFFA"/>'+
+    '<path d="M470,105 L505,70 L541,113 L519,120 L505,102 L491,122 Z" fill="#FBFFFA"/>'+
+    '<path d="M120,270 L330,80 L342,92 L150,270 Z" fill="#ffffff" opacity="0.14"/>'+
+
+    '<rect x="503" y="66" width="4" height="42" fill="#7a4a12"/>'+
+    '<path d="M507,66 Q532,72 545,78 Q532,86 507,90 Z" fill="#E2574C"/>'+
+    '<path d="M507,66 Q532,72 545,78 Q532,80 507,80 Z" fill="#ffffff" opacity="0.25"/>'+
+
+    '<path d="M0,235 Q220,195 400,225 Q560,252 800,220 L800,340 L0,340 Z" fill="url(#groundGrad)"/>'+
+    '<g opacity="0.9">'+
+      '<path d="M96,236 L104,236 L108,222 L100,208 L92,222 Z" fill="#0B5C39"/>'+
+      '<path d="M690,222 L700,222 L705,205 L695,188 L685,205 Z" fill="#0B5C39"/>'+
+      '<path d="M660,232 L667,232 L670,220 L663,209 L656,220 Z" fill="#0B5C39"/>'+
+    '</g>'+
+
+    '<path d="M70,262 Q210,205 330,178 Q420,157 470,120 Q505,95 560,80" fill="none" stroke="#0B5C39" stroke-width="22" stroke-linecap="round" opacity="0.25"/>'+
+    '<path d="M70,258 Q210,201 330,174 Q420,153 470,116 Q505,91 560,76" fill="none" stroke="#F1E2BE" stroke-width="15" stroke-linecap="round"/>'+
+    '<path d="M70,258 Q210,201 330,174 Q420,153 470,116 Q505,91 560,76" fill="none" stroke="#FBF2D9" stroke-width="6" stroke-linecap="round" stroke-dasharray="1,17"/>'+
+
+    '<ellipse cx="345" cy="205" rx="20" ry="6" fill="#04241a" opacity="0.18"/>'+
+    '<g transform="translate(345,200)">'+
+      '<path d="M-15,-2 Q-19,-16 -8,-19 L6,-19 Q10,-8 5,2 Z" fill="#00875A"/>'+
+      '<circle cx="1" cy="-42" r="12" fill="#F6C9A0"/>'+
+      '<path d="M-8,-52 Q1,-58 10,-52 Q11,-44 1,-42 Q-9,-44 -8,-52Z" fill="#241a10"/>'+
+      '<rect x="-13" y="-33" width="15" height="21" rx="7" fill="#00A86B"/>'+
+      '<path d="M-9,-33 L6,-11" stroke="#0E3324" stroke-width="4.5" stroke-linecap="round"/>'+
+      '<path d="M-9,-33 L-22,-14" stroke="#0E3324" stroke-width="4.5" stroke-linecap="round"/>'+
+      '<path d="M-5,-12 L-13,20" stroke="#0E3324" stroke-width="5.5" stroke-linecap="round"/>'+
+      '<path d="M-5,-12 L4,20" stroke="#0E3324" stroke-width="5.5" stroke-linecap="round"/>'+
+      '<path d="M12,-8 L12,22" stroke="#8a5c14" stroke-width="3" stroke-linecap="round"/>'+
+    '</g>'+
+
+    '<g opacity="0.9"><ellipse cx="150" cy="88" rx="34" ry="13" fill="#fff"/><ellipse cx="180" cy="82" rx="24" ry="11" fill="#fff"/></g>'+
+    '<g opacity="0.85"><ellipse cx="600" cy="150" rx="26" ry="10" fill="#fff"/><ellipse cx="622" cy="145" rx="18" ry="8" fill="#fff"/></g>'+
+    '<rect width="800" height="340" fill="url(#vignette)"/>'+
   '</svg>';
 }
 
@@ -1611,12 +1678,12 @@ function viewDashboard(){
   const d = getDashboardData();
 
   if(!d.hasActivity){
-    return '<div class="card">'+
-      '<div class="dash-welcome">'+wenboAvatar(64)+
+    return '<div class="dash-shell">'+
+      '<div class="dash-welcome-refined">'+wenboAvatar(64)+
         '<div><h1>Welcome, Wenbo!</h1><p>Let\'s get started on becoming a stronger learner.</p></div>'+
       '</div>'+
-      '<div class="journey-card">'+journeyMountainSVG()+'</div>'+
-      '<div class="dash-empty">'+
+      '<div class="journey-card-refined">'+journeyMountainSVG()+'</div>'+
+      '<div class="dash-empty-refined">'+
         '<h3>🌱 You\'re just getting started</h3>'+
         '<p>Answer a few questions and Ethixo will start noticing how you learn.</p>'+
         '<button class="btn btn-primary" onclick="goto(\'subject\')">Start Practising →</button>'+
@@ -1630,48 +1697,59 @@ function viewDashboard(){
   if(newIds.length) markNoticedSeen(newIds);
 
   const noticedHtml = d.noticed.map(function(n){
-    return '<div class="noticed-item'+(n.isNew?' new':'')+'">'+n.text+'</div>';
+    return '<div class="noticed-item-refined'+(n.isNew?' new':'')+'">'+
+      '<span class="ni-mark">✓</span><span>'+n.text+'</span>'+
+      (n.isNew?'<span class="ni-badge">New</span>':'')+
+    '</div>';
   }).join("");
 
   const examTotal = d.examReady.total;
+  const SUBJECT_ICON = { EN:"📖", SCI:"🔬", SS:"🌏" };
   const examRows = ["EN","SCI","SS"].map(function(k){
-    return '<div class="examready-row"><span>'+SUBJECT_META[k].name+'</span><span class="cnt">'+d.examReady.bySubject[k]+'</span></div>';
+    return '<div class="er-row"><span class="er-icon">'+SUBJECT_ICON[k]+'</span><span class="er-name">'+SUBJECT_META[k].name+'</span><span class="er-count">'+d.examReady.bySubject[k]+'</span></div>';
   }).join("");
 
-  return '<div class="card">'+
-    '<div class="dash-welcome">'+wenboAvatar(64)+
+  return '<div class="dash-shell">'+
+    '<div class="dash-welcome-refined">'+wenboAvatar(64)+
       '<div><h1>Welcome back, Wenbo!</h1><p>This term, you\'re becoming a stronger learner.</p></div>'+
     '</div>'+
-    '<div class="journey-card">'+journeyMountainSVG()+
-      '<button class="btn btn-primary journey-cta" onclick="goto(\'journey\')">View My Learning Journey →</button>'+
+    '<div class="journey-card-refined">'+journeyMountainSVG()+
+      '<div class="journey-overlay"><button class="journey-cta-refined" onclick="goto(\'journey\')">View My Learning Journey →</button></div>'+
     '</div>'+
-    '<div class="noticed-card">'+
-      '<h3>👀 Ethixo Noticed</h3>'+noticedHtml+
+    '<div class="noticed-card-refined">'+
+      '<div class="noticed-head"><span class="nh-badge">👀</span><h3>Ethixo Noticed</h3></div>'+
+      '<div class="noticed-list">'+noticedHtml+'</div>'+
     '</div>'+
-    '<div class="dash-grid3">'+
-      '<div class="mini-card tint-green">'+
-        '<div class="mc-big">🌱 '+d.growth.newIdeasCount+' new ideas now make sense to you.</div>'+
-        '<a class="mc-view" href="#" onclick="event.preventDefault();goto(\'learned\')">View what you\'ve learned →</a>'+
+    '<div class="growth-row">'+
+      '<div class="growth-card tint-green">'+
+        '<div class="gc-icon">🌱</div>'+
+        '<div class="gc-number">'+d.growth.newIdeasCount+'</div>'+
+        '<div class="gc-label">new ideas now make sense to you</div>'+
+        '<a class="gc-view" href="#" onclick="event.preventDefault();goto(\'learned\')">View what you\'ve learned →</a>'+
       '</div>'+
-      '<div class="mini-card tint-blue">'+
-        '<div class="mc-big">💡 '+d.misconceptions.count+' misunderstandings corrected</div>'+
-        '<a class="mc-view" href="#" onclick="event.preventDefault();goto(\'misconceptions\')">View →</a>'+
+      '<div class="growth-card tint-blue">'+
+        '<div class="gc-icon">💡</div>'+
+        '<div class="gc-number">'+d.misconceptions.count+'</div>'+
+        '<div class="gc-label">misunderstandings corrected</div>'+
+        '<a class="gc-view" href="#" onclick="event.preventDefault();goto(\'misconceptions\')">View →</a>'+
       '</div>'+
-      '<div class="mini-card tint-amber">'+
-        '<div class="mc-big">🧠 '+d.thinking.count+' thinking improvements</div>'+
-        '<a class="mc-view" href="#" onclick="event.preventDefault();goto(\'improvements\')">View →</a>'+
+      '<div class="growth-card tint-amber">'+
+        '<div class="gc-icon">🧠</div>'+
+        '<div class="gc-number">'+d.thinking.count+'</div>'+
+        '<div class="gc-label">thinking improvements</div>'+
+        '<a class="gc-view" href="#" onclick="event.preventDefault();goto(\'improvements\')">View →</a>'+
       '</div>'+
     '</div>'+
-    '<div class="examready-card">'+
-      '<h3>🌟 My Exam Ready Answers</h3>'+
+    '<div class="examready-card-refined">'+
+      '<div class="er-head"><span class="er-badge">🌟</span><h3>My Exam Ready Answers</h3></div>'+
       '<p class="hint">Answers you can confidently use in exams.</p>'+
       (examTotal ? examRows : '<p class="qmeta">None saved yet — answer a question really well and save it here.</p>')+
-      '<div class="row" style="margin-top:12px;"><a class="mc-view" href="#" onclick="event.preventDefault();goto(\'vault\')">View all answers →</a></div>'+
+      '<a class="er-viewall" href="#" onclick="event.preventDefault();goto(\'vault\')">View all answers →</a>'+
     '</div>'+
-    '<div class="nextstep-card">'+
-      '<h3>🎯 Your Next Step</h3>'+
+    '<div class="nextstep-card-refined">'+
+      '<div class="ns-eyebrow">🎯 Your Next Step</div>'+
       '<div class="ns-text">'+d.nextStep.coach+'</div>'+
-      '<button class="btn btn-primary" onclick="goto(\'subject\')">Practice Now →</button>'+
+      '<button class="btn-nextstep" onclick="goto(\'subject\')">Practice Now →</button>'+
     '</div>'+
   '</div>';
 }
