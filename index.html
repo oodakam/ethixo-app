@@ -5,6 +5,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -102,13 +103,12 @@
 
   .journey-card-refined{position:relative;border-radius:var(--card-radius);overflow:hidden;margin-bottom:var(--ds-lg);box-shadow:0 2px 8px rgba(24,36,32,.06),0 24px 48px -16px rgba(14,58,38,.32);background:#EAF3EC;}
   .journey-hero-img{display:block;width:100%;height:auto;max-width:1400px;aspect-ratio:2/1;object-fit:cover;margin:0 auto;}
-  .journey-title-overlay{position:absolute;left:6.5%;top:26%;max-width:46%;pointer-events:none;}
-  .journey-title-overlay .jt-title{font-size:30px;font-weight:800;color:#fff;line-height:1.16;margin:0 0 9px;letter-spacing:-.3px;text-shadow:0 1px 3px rgba(0,0,0,.55),0 6px 18px rgba(0,0,0,.35);}
-  .journey-title-overlay .jt-sub{font-size:18px;font-weight:600;color:#fff;line-height:1.4;margin:0;max-width:290px;text-shadow:0 1px 2px rgba(0,0,0,.5),0 4px 14px rgba(0,0,0,.35);}
-  @media(max-width:560px){.journey-title-overlay{left:5%;top:16%;max-width:75%;}.journey-title-overlay .jt-title{font-size:20px;}.journey-title-overlay .jt-sub{font-size:14px;max-width:220px;}}
-  .journey-overlay{position:absolute;left:0;right:0;bottom:0;padding:26px 30px;display:flex;justify-content:flex-end;background:linear-gradient(0deg,rgba(10,26,18,.42),rgba(10,26,18,0) 65%);}
-  .journey-cta-refined{background:rgba(255,255,255,.96);color:var(--brand-deep);border:none;border-radius:13px;padding:14px 24px;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 8px 22px rgba(4,44,29,.26);transition:transform .12s,background .12s;}
-  .journey-cta-refined:hover{background:#fff;transform:translateY(-1px);}
+  .journey-content-card{position:absolute;right:5%;bottom:7%;max-width:340px;background:rgba(255,255,255,.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.7);border-radius:18px;padding:24px 26px;box-shadow:0 16px 36px rgba(14,58,38,.22),0 2px 10px rgba(14,58,38,.1);}
+  .journey-content-card .jt-title{font-size:21px;font-weight:800;color:var(--ink);line-height:1.22;margin:0 0 8px;letter-spacing:-.2px;}
+  .journey-content-card .jt-sub{font-size:14.5px;font-weight:500;color:var(--muted);line-height:1.42;margin:0 0 16px;}
+  .journey-content-card .journey-cta-refined{background:linear-gradient(120deg,var(--brand),var(--brand-dark));color:#fff;border:none;border-radius:12px;padding:12px 18px;font-weight:700;font-size:14px;cursor:pointer;width:100%;box-shadow:0 6px 16px rgba(0,168,107,.3);transition:transform .12s;}
+  .journey-content-card .journey-cta-refined:hover{transform:translateY(-1px);}
+  @media(max-width:560px){.journey-content-card{right:4%;left:4%;bottom:5%;max-width:none;padding:16px 18px;}.journey-content-card .jt-title{font-size:16.5px;}.journey-content-card .jt-sub{font-size:12.5px;margin-bottom:12px;}}
 
   .noticed-card-refined{background:linear-gradient(155deg,var(--brand-light),#fff 78%);border:1px solid var(--brand-light-b);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:30px 32px;margin-bottom:var(--ds-md);}
   .noticed-head{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
@@ -1546,12 +1546,11 @@ function dicon(name, px){
 
 function renderHeroCard(opts){
   const cta = opts.ctaLabel
-    ? '<div class="journey-overlay"><button class="journey-cta-refined" onclick="'+opts.ctaOnclick+'">'+opts.ctaLabel+'</button></div>'
+    ? '<button class="journey-cta-refined" onclick="'+opts.ctaOnclick+'">'+opts.ctaLabel+'</button>'
     : "";
   return '<div class="journey-card-refined">'+
     '<img class="journey-hero-img" src="'+opts.src+'" width="'+opts.w+'" height="'+opts.h+'" alt="'+opts.alt+'" loading="eager" decoding="async">'+
-    '<div class="journey-title-overlay"><div class="jt-title">'+opts.title+'</div><div class="jt-sub">'+opts.subtitle+'</div></div>'+
-    cta+
+    '<div class="journey-content-card"><div class="jt-title">'+opts.title+'</div><div class="jt-sub">'+opts.subtitle+'</div>'+cta+'</div>'+
   '</div>';
 }
 /* Ethixo's current default Hero illustration (assets/hero-default-production.webp, 1400x700,
