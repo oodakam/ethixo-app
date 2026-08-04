@@ -6,6 +6,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -78,6 +79,8 @@
   .qnum{width:26px;height:26px;border-radius:50%;background:var(--brand-deep);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;}
   .qtext{flex:1;font-size:14.5px;min-width:180px;}
   .qmeta{color:var(--muted);font-size:11.5px;margin-top:2px;}
+  .privacy-note{color:var(--muted);font-size:13.5px;line-height:1.5;margin:14px 0 10px;font-weight:400;}
+  .privacy-note b{font-weight:600;color:var(--muted);}
   .status{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;}
   .status.done{background:var(--brand-light);color:var(--brand-deep);}
   .status.almost{background:#E3EEFB;color:#1D5A9E;}
@@ -1090,6 +1093,14 @@ async function startCustom(){
 }
 
 /* ---- Answer ---- */
+/* Private Practice reassurance — shown directly above every answer-writing textarea.
+   Deliberately plain (no background/border/dismiss) so it reads as a quiet, permanent
+   part of the interface rather than a warning or notification. */
+function privacyNote(){
+  return '<p class="privacy-note">🔒 <b>Your practice is private.</b> Make mistakes. Change your mind. Think freely.<br>'+
+    'Your teacher and parents will see your progress, not your practice attempts.</p>';
+}
+
 function viewAnswer(){
   const q = state.currentQuestion;
   // Bank questions (with a model answer) start the Thinking Cycle on submit — Ethixo is
@@ -1103,6 +1114,7 @@ function viewAnswer(){
     '<h1 class="title">Write your Best Answer</h1>'+
     '<p class="qmeta" style="font-size:13px;">'+q.m+' Mark'+(q.m>1?"s":"")+'</p>'+
     '<p style="font-weight:700;color:var(--ink);font-size:16px;">'+q.t+'</p>'+
+    privacyNote()+
     '<textarea id="answerBox" placeholder="Type your answer here (in English)…" oninput="state.answerDraft=this.value">'+state.answerDraft+'</textarea>'+
     (state.error? '<div class="errbox">'+state.error+' <a href="#" onclick="event.preventDefault();submitAnswer()">Try again</a></div>':"")+
     '<div class="row between" style="margin-top:18px;">'+
@@ -1256,6 +1268,7 @@ function viewThinking(){
     '<p class="turnbadge">'+q.m+' Mark'+(q.m>1?"s":"")+' · '+(finalMode? 'Write your final answer below' : 'Thinking Turn '+state.thinkingTurn+' of 3')+'</p>'+
     '<p style="font-weight:700;color:var(--ink);font-size:15px;margin-top:8px;">'+q.t+'</p>'+
     '<div class="chatlog">'+history+'</div>'+
+    privacyNote()+
     '<textarea id="thinkingBox" placeholder="'+(finalMode? 'Type your final answer here…' : 'Type your response here…')+'" oninput="state.thinkingDraft=this.value">'+(state.thinkingDraft||"")+'</textarea>'+
     (state.error? '<div class="errbox">'+state.error+'</div>':"")+
     '<div class="row between" style="margin-top:18px;">'+
@@ -1385,6 +1398,7 @@ async function viewImprove(){
     '<p style="font-weight:700;color:var(--ink);">'+q.t+'</p>'+
     '<div class="history">'+(hist || '<span class="qmeta">No attempts yet</span>')+'</div>'+
     '<label class="field">Your improved answer</label>'+
+    privacyNote()+
     '<textarea id="improveBox" placeholder="Type your answer here (in English)…" oninput="state.improveDraft=this.value">'+(state.improveDraft||"")+'</textarea>'+
     (state.error? '<div class="errbox">'+state.error+'</div>':"")+
     '<div class="row between" style="margin-top:18px;">'+
