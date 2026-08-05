@@ -7,6 +7,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -106,12 +107,15 @@
 
   .journey-card-refined{position:relative;border-radius:var(--card-radius);overflow:hidden;margin-bottom:var(--ds-lg);box-shadow:0 2px 8px rgba(24,36,32,.06),0 24px 48px -16px rgba(14,58,38,.32);background:#EAF3EC;}
   .journey-hero-img{display:block;width:100%;height:auto;max-width:1400px;aspect-ratio:2/1;object-fit:cover;margin:0 auto;}
-  .journey-content-card{position:absolute;right:5%;bottom:7%;max-width:340px;background:rgba(255,255,255,.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.7);border-radius:18px;padding:24px 26px;box-shadow:0 16px 36px rgba(14,58,38,.22),0 2px 10px rgba(14,58,38,.1);}
+  .journey-content-card{position:absolute;right:5%;bottom:7%;max-width:400px;background:rgba(255,255,255,.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.7);border-radius:18px;padding:24px 26px;box-shadow:0 16px 36px rgba(14,58,38,.22),0 2px 10px rgba(14,58,38,.1);}
   .journey-content-card .jt-title{font-size:21px;font-weight:800;color:var(--ink);line-height:1.22;margin:0 0 8px;letter-spacing:-.2px;}
   .journey-content-card .jt-sub{font-size:14.5px;font-weight:500;color:var(--muted);line-height:1.42;margin:0 0 16px;}
-  .journey-content-card .journey-cta-refined{background:linear-gradient(120deg,var(--brand),var(--brand-dark));color:#fff;border:none;border-radius:12px;padding:12px 18px;font-weight:700;font-size:14px;cursor:pointer;width:100%;box-shadow:0 6px 16px rgba(0,168,107,.3);transition:transform .12s;}
-  .journey-content-card .journey-cta-refined:hover{transform:translateY(-1px);}
-  @media(max-width:560px){.journey-content-card{right:4%;left:4%;bottom:5%;max-width:none;padding:16px 18px;}.journey-content-card .jt-title{font-size:16.5px;}.journey-content-card .jt-sub{font-size:12.5px;margin-bottom:12px;}}
+  .journey-cta-row{display:flex;gap:10px;}
+  .journey-cta-primary{background:linear-gradient(120deg,var(--brand),var(--brand-dark));color:#fff;border:none;border-radius:11px;padding:11px 18px;font-weight:700;font-size:13.5px;cursor:pointer;box-shadow:0 6px 14px rgba(0,168,107,.3);transition:transform .12s;white-space:nowrap;}
+  .journey-cta-primary:hover{transform:translateY(-1px);}
+  .journey-cta-secondary{background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:11px;padding:11px 16px;font-weight:700;font-size:13.5px;cursor:pointer;box-shadow:0 2px 6px rgba(24,36,32,.08);transition:transform .12s,border-color .12s;}
+  .journey-cta-secondary:hover{border-color:var(--brand);transform:translateY(-1px);}
+  @media(max-width:560px){.journey-content-card{right:4%;left:4%;bottom:5%;max-width:none;padding:16px 18px;}.journey-content-card .jt-title{font-size:16.5px;}.journey-content-card .jt-sub{font-size:12.5px;margin-bottom:12px;}.journey-cta-row{flex-direction:column;}.journey-cta-primary,.journey-cta-secondary{width:100%;text-align:center;}}
 
   .noticed-card-refined{background:linear-gradient(155deg,var(--brand-light),#fff 78%);border:1px solid var(--brand-light-b);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:30px 32px;margin-bottom:var(--ds-md);}
   .noticed-head{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
@@ -672,6 +676,18 @@ const TEACHER_ROSTER = [
   {name:"Hafiz Ismail", time:88, mastery:55},
 ];
 function saveLastLesson(level, subjectKey, lessonId){ sSet("lastLesson", {level:level, subjectKey:subjectKey, lessonId:lessonId}); }
+// Hero "Practice Now" — reuses the existing continue-where-you-left-off tracking
+// (lastLesson, already saved by goto() every time a question bank is visited) rather
+// than introducing new navigation logic. Falls back to subject selection if there's
+// no history yet for the student's current level.
+function resumePractice(){
+  const last = sGet("lastLesson");
+  if(last && last.level === state.level){
+    goto("qbank", {level:last.level, subjectKey:last.subjectKey, lessonId:last.lessonId});
+  } else {
+    goto("subject");
+  }
+}
 
 /* ---------- Time tracking (this browser/device only) ---------- */
 function todayKey(){ return new Date().toISOString().slice(0,10); }
@@ -1559,23 +1575,33 @@ function dicon(name, px){
 }
 
 function renderHeroCard(opts){
-  const cta = opts.ctaLabel
-    ? '<button class="journey-cta-refined" onclick="'+opts.ctaOnclick+'">'+opts.ctaLabel+'</button>'
+  const primaryBtn = opts.primaryLabel
+    ? '<button class="journey-cta-primary" onclick="'+opts.primaryOnclick+'">'+opts.primaryLabel+'</button>'
     : "";
+  const secondaryBtn = opts.secondaryLabel
+    ? '<button class="journey-cta-secondary" onclick="'+opts.secondaryOnclick+'">'+opts.secondaryLabel+'</button>'
+    : "";
+  const btnRow = (primaryBtn || secondaryBtn) ? '<div class="journey-cta-row">'+primaryBtn+secondaryBtn+'</div>' : "";
   return '<div class="journey-card-refined">'+
     '<img class="journey-hero-img" src="'+opts.src+'" width="'+opts.w+'" height="'+opts.h+'" alt="'+opts.alt+'" loading="eager" decoding="async">'+
-    '<div class="journey-content-card"><div class="jt-title">'+opts.title+'</div><div class="jt-sub">'+opts.subtitle+'</div>'+cta+'</div>'+
+    '<div class="journey-content-card"><div class="jt-title">'+opts.title+'</div><div class="jt-sub">'+opts.subtitle+'</div>'+btnRow+'</div>'+
   '</div>';
 }
 /* Ethixo's current default Hero illustration (assets/hero-default-production.webp, 1400x700,
-   loaded as a normal static file — never base64 — so the browser can cache it). */
-function defaultHeroCard(ctaLabel, ctaOnclick){
+   loaded as a normal static file — never base64 — so the browser can cache it).
+   showActions=true (used on the populated dashboard) adds the Practice Now (primary) +
+   View My Learning Journey (secondary) button pair. Omit/false for the empty-state hero,
+   which intentionally has no buttons of its own (its CTA lives in the message card below). */
+function defaultHeroCard(showActions){
   return renderHeroCard({
     src: "assets/hero-default-production.webp", w: 1400, h: 700,
     alt: "A student stands at a mountain overlook at sunrise, backpack on, looking toward a flag at the summit — a signpost beside them marks ideas, learning, growth and progress along the path.",
     title: "Your Learning Journey",
     subtitle: "Every answer moves you one step forward.",
-    ctaLabel: ctaLabel, ctaOnclick: ctaOnclick,
+    primaryLabel: showActions ? "Practice Now" : null,
+    primaryOnclick: "resumePractice()",
+    secondaryLabel: showActions ? "View My Learning Journey" : null,
+    secondaryOnclick: "goto('journey')",
   });
 }
 
@@ -1715,7 +1741,7 @@ function viewDashboard(){
     '<div class="dash-welcome-refined">'+wenboAvatar(64)+
       '<div><h1>Welcome back, Wenbo!</h1><p>This term, you\'re becoming a stronger learner.</p></div>'+
     '</div>'+
-    defaultHeroCard("View My Learning Journey →", "goto('journey')")+
+    defaultHeroCard(true)+
     '<div class="noticed-card-refined">'+
       '<div class="noticed-head"><span class="nh-badge">'+dicon('eye',24)+'</span><h3>Ethixo Noticed</h3></div>'+
       '<div class="noticed-list">'+noticedHtml+'</div>'+
