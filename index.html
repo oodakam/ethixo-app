@@ -9,6 +9,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -207,6 +208,12 @@
   .t-detail-row{display:flex;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid var(--border);font-size:15px;}
   .t-detail-row .t-detail-label{color:var(--muted);font-weight:600;}
   .t-detail-row .t-detail-val{color:var(--ink);font-weight:700;text-align:right;}
+  .t-workspace-context{margin-bottom:16px;}
+  .t-workspace-chip{display:inline-flex;align-items:center;gap:8px;background:var(--panel);color:var(--muted);font-weight:700;font-size:13px;padding:7px 14px;border-radius:20px;}
+  .growth-card.t-clickable{cursor:pointer;transition:transform .12s,box-shadow .12s;}
+  .growth-card.t-clickable:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(24,36,32,.12);}
+  .t-tap-hint{font-size:12px;font-weight:700;color:var(--brand-deep);margin-top:10px;opacity:.85;}
+  .t-insight-banner{background:var(--brand-light);border:1px solid var(--brand-light-b);border-radius:14px;padding:16px 18px;font-size:14.5px;font-weight:600;color:var(--brand-deep);margin-bottom:20px;}
 
   .learned-subject{margin-bottom:24px;}
   .learned-subject h3{margin:0 0 10px;color:var(--ink);font-size:16px;font-weight:800;}
@@ -638,7 +645,7 @@ const LEVELS = {
 let state = { view:"entry", level:null, subjectKey:null, lessonId:null, currentQuestion:null,
   answerDraft:"", feedback:null, loading:false, validating:false, error:null, toast:null, vault:[], selectedVaultIds:[],
   thinkingTurn:0, thinkingHistory:[], thinkingHistoryQid:null, questionDemand:null, usedClarification:false, awaitingFinalAnswer:false,
-  thinkingDraft:"", improveDraft:"", teacherClassId:"overview", teacherStudentName:null };
+  thinkingDraft:"", improveDraft:"", teacherClassId:"overview", teacherStudentName:null, teacherProgressMetric:null };
 
 // Bumped on every navigation (goto/popstate) and captured at the start of every submission.
 // A submit function checks its own captured id against this after each await; if they no
@@ -705,16 +712,25 @@ function teacherAvatar(size){
    TEACHER DASHBOARD — data model (confidence dashboard, not a grading dashboard)
    =====================================================================
    Per the brief: never show time-spent/login-count/comparative rankings/labels.
+
+   IMPORTANT — subject-locked workspace: a teacher teaches ONE subject. Sharon's
+   established subject (from her original profile) is Social Studies, so her
+   entire workspace — Teaching Insights, Exam Ready Answers, encourage-focus areas,
+   progress-metric detail — surfaces Social Studies content ONLY. TEACHER_PROFILE
+   is the single place this is set, so the same component can serve a Science or
+   English teacher later by pointing it at different data, with no UI rewrite.
+
    Sharon teaches 3 classes. P6-A is her real class (Wenbo Lee is the one real,
-   live student on this device — blended into an otherwise-fictional roster, same
-   pattern the app already used before this rework). P5 Orchid and P5 Lily are
-   additional fictional demo classes so the class-tab architecture and cross-class
-   "Teaching Insights" aggregation have something real to demonstrate.
+   live student on this device — blended into an otherwise-fictional roster). P5
+   Orchid and P5 Lily are additional fictional demo classes so the class-tab
+   architecture and cross-class "Teaching Insights" aggregation have something
+   real to demonstrate.
 
    Everything reads through getTeacherDashboardData(classId) — a single provider
-   boundary (per the brief's "getDashboardData()" guidance) so the UI never knows
-   mock vs real, and a future real backend only has to change what's INSIDE this
-   function, never the views that call it. */
+   boundary so the UI never knows mock vs real, and a future real backend only
+   has to change what's INSIDE this function, never the views that call it. */
+
+const TEACHER_PROFILE = { name:"Sharon Lim", subject:"Social Studies", subjectIcon:"globe", levelRange:"Primary 5 & 6" };
 
 const TEACHER_CLASSES = [
   { id:"p6a", label:"P6-A", level:"P6" },
@@ -725,83 +741,120 @@ const TEACHER_CLASSES = [
 const TEACHER_CLASS_DATA = {
   p6a: {
     rosterNames: ["Aisyah Rahman","Marcus Tan","Priya Nair","Jayden Ong","Nur Fatimah","Ryan Koh","Divya Suresh","Ethan Goh","Hafiz Ismail"],
-    progress: { newIdeas: 128, misconceptionsCorrected: 34, examReadyWritten: 0 /* computed: real Wenbo vault + mock */, explainedIndependently: 49 },
+    progress: { newIdeas: 41, misconceptionsCorrected: 13, explainedIndependently: 22 },
     noticed: [
       "More students are explaining their thinking before writing.",
-      "Fewer students are repeating the same misconceptions in Social Studies.",
+      "Fewer students are mixing up countries and ethnic groups.",
       "More students are completing Thinking Cycles independently, without needing a nudge.",
     ],
     encourage: [
-      { name:"Ryan Koh", focus:"Friction and Force" },
+      { name:"Ryan Koh", focus:"Why Singapore became a port city" },
       { name:"Nur Fatimah", focus:"Supporting answers with evidence" },
-      { name:"Jayden Ong", focus:"Comparing ideas" },
+      { name:"Jayden Ong", focus:"Comparing settlements" },
     ],
     misconceptions: [
-      { title:"Evaporation vs Boiling", pct:41 },
-      { title:"Push vs Force", pct:28 },
+      { title:"Countries vs Ethnic Groups", pct:38 },
+      { title:"Trade Routes vs Borders", pct:24 },
       { title:"Supporting answers with evidence", pct:22 },
     ],
-    examReady: [
-      { subject:"Science", answerCount:64, examReadyCount:22 },
-      { subject:"English", answerCount:58, examReadyCount:19 },
-      { subject:"Social Studies", answerCount:71, examReadyCount:25 },
-    ],
+    examReady: { answerCount:71, examReadyCount:25 },
   },
   p5orchid: {
     rosterNames: ["Wei Ling Chua","Farah Aziz","Kai Xuan Lim","Devan Raj","Michelle Ho","Zul Hakim","Bella Wong","Aravind Kumar"],
-    progress: { newIdeas: 96, misconceptionsCorrected: 21, examReadyWritten: 41, explainedIndependently: 33 },
+    progress: { newIdeas: 29, misconceptionsCorrected: 9, explainedIndependently: 15 },
     noticed: [
       "Students are changing their first answers less often after reflecting.",
       "More students are giving a reason before their answer, not just after.",
       "Fewer students are guessing when a question feels unfamiliar.",
     ],
     encourage: [
-      { name:"Devan Raj", focus:"Evaporation and boiling" },
+      { name:"Devan Raj", focus:"Countries vs Ethnic Groups" },
       { name:"Bella Wong", focus:"Reading the whole question before answering" },
     ],
     misconceptions: [
-      { title:"Evaporation vs Boiling", pct:36 },
-      { title:"Subject-verb agreement", pct:19 },
+      { title:"Countries vs Ethnic Groups", pct:33 },
+      { title:"Push and Pull Factors in Migration", pct:19 },
     ],
-    examReady: [
-      { subject:"Science", answerCount:47, examReadyCount:16 },
-      { subject:"English", answerCount:52, examReadyCount:18 },
-      { subject:"Social Studies", answerCount:38, examReadyCount:11 },
-    ],
+    examReady: { answerCount:38, examReadyCount:11 },
   },
   p5lily: {
     rosterNames: ["Shervon Tan","Amirah Yusof","Ken Osei","Natalie Pereira","Rayyan Ismail","Xin Yi Koh","Daniel Prakash"],
-    progress: { newIdeas: 74, misconceptionsCorrected: 17, examReadyWritten: 29, explainedIndependently: 22 },
+    progress: { newIdeas: 21, misconceptionsCorrected: 7, explainedIndependently: 10 },
     noticed: [
       "More students are comparing two ideas before choosing an answer.",
       "Fewer students are repeating the same misconception after one correction.",
     ],
     encourage: [
-      { name:"Rayyan Ismail", focus:"Push vs Force" },
+      { name:"Rayyan Ismail", focus:"Trade Routes vs Borders" },
       { name:"Xin Yi Koh", focus:"Explaining why an answer is correct" },
     ],
     misconceptions: [
-      { title:"Push vs Force", pct:31 },
-      { title:"Countries vs Ethnic Groups", pct:24 },
+      { title:"Trade Routes vs Borders", pct:28 },
+      { title:"Push and Pull Factors in Migration", pct:21 },
     ],
-    examReady: [
-      { subject:"Science", answerCount:33, examReadyCount:9 },
-      { subject:"English", answerCount:29, examReadyCount:12 },
-      { subject:"Social Studies", answerCount:26, examReadyCount:8 },
-    ],
+    examReady: { answerCount:26, examReadyCount:8 },
   },
 };
 
 // "Students to Encourage" detail view — deliberately minimal per the brief (no raw
 // answers, no Thinking Cycle transcripts). Keyed by student name.
 const TEACHER_STUDENT_DETAIL = {
-  "Ryan Koh": { focus:"Friction and Force", progress:"Improving", noticed:"Still needs more practice explaining how friction changes in different situations." },
+  "Ryan Koh": { focus:"Why Singapore became a port city", progress:"Improving", noticed:"Explains the location correctly now — still needs one more piece of evidence to reach full marks." },
   "Nur Fatimah": { focus:"Supporting answers with evidence", progress:"Improving", noticed:"Getting closer to full marks — now needs one more piece of evidence per answer." },
-  "Jayden Ong": { focus:"Comparing ideas", progress:"Just getting started", noticed:"Beginning to notice differences between similar ideas, with some guidance." },
-  "Devan Raj": { focus:"Evaporation and boiling", progress:"Improving", noticed:"Understands the words now, still mixes up which one happens where." },
+  "Jayden Ong": { focus:"Comparing settlements", progress:"Just getting started", noticed:"Beginning to notice differences between settlements, with some guidance." },
+  "Devan Raj": { focus:"Countries vs Ethnic Groups", progress:"Improving", noticed:"Understands the terms now, still mixes up which describes which." },
   "Bella Wong": { focus:"Reading the whole question before answering", progress:"Just getting started", noticed:"Often answers part of the question — encourage a full re-read before writing." },
-  "Rayyan Ismail": { focus:"Push vs Force", progress:"Improving", noticed:"Can describe a push, still developing the more general idea of force." },
+  "Rayyan Ismail": { focus:"Trade Routes vs Borders", progress:"Improving", noticed:"Can describe a trade route, still developing the distinction from a border." },
   "Xin Yi Koh": { focus:"Explaining why an answer is correct", progress:"Just getting started", noticed:"Answers are often right — the reasoning behind them is the next step." },
+};
+
+// Powers the clickable Class Progress cards: Summary -> Detail -> Learning insight.
+// Class-level concept/skill information only — never raw answers or Thinking Cycle
+// conversations. bySubject-free by design: this teacher's whole workspace is
+// Social Studies, so every item here already IS in that one subject.
+const TEACHER_METRIC_DETAIL = {
+  newIdeas: {
+    label: "New Ideas Understood",
+    insightByClass: {
+      p6a: "P6-A is steadily building understanding of Social Studies concepts this term.",
+      p5orchid: "P5 Orchid is making early progress on foundational Social Studies ideas.",
+      p5lily: "P5 Lily is starting to connect ideas across topics, a little more each week.",
+      overview: "Across your classes, understanding is building steadily topic by topic.",
+    },
+    itemsByClass: {
+      p6a: ["Why Singapore became a port city", "How trade connects Southeast Asia", "What makes a community diverse", "Cultural traditions in the region"],
+      p5orchid: ["Why early settlements formed near water", "Roles within a community"],
+      p5lily: ["How transport links people together", "Push and pull factors in migration"],
+    },
+  },
+  misconceptionsCorrected: {
+    label: "Misconceptions Corrected",
+    insightByClass: {
+      p6a: "P6-A is resolving misconceptions faster than earlier in the term.",
+      p5orchid: "P5 Orchid has cleared up a few common early misunderstandings.",
+      p5lily: "P5 Lily is starting to correct misconceptions with less repetition.",
+      overview: "Across your classes, misconceptions are being resolved rather than repeated.",
+    },
+    itemsByClass: {
+      p6a: [{title:"Confusing a nation with its people", note:"Most of the class now correctly distinguishes a country from its ethnic groups."}],
+      p5orchid: [{title:"Confusing a nation with its people", note:"About half the class has corrected this so far."}],
+      p5lily: [{title:"Confusing a border with a trade route", note:"A small group still needs a second explanation."}],
+    },
+  },
+  explainedIndependently: {
+    label: "Answers Explained Independently",
+    insightByClass: {
+      p6a: "More of P6-A is giving reasons for their answers without being asked.",
+      p5orchid: "P5 Orchid is beginning to explain answers, not just state them.",
+      p5lily: "P5 Lily is starting to justify answers with their own reasoning.",
+      overview: "Across your classes, more students are explaining their reasoning unprompted.",
+    },
+    itemsByClass: {
+      p6a: ["Explaining cause and effect", "Comparing two settlements", "Giving evidence for an opinion"],
+      p5orchid: ["Describing why a place was chosen for settlement"],
+      p5lily: ["Explaining why people move between places"],
+    },
+  },
 };
 
 // Deterministic — real application logic, not AI, per the brief (section 14).
@@ -811,20 +864,20 @@ function getTeacherDashboardData(classId){
 
   // Real Wenbo Lee data blended into P6-A only (he's the one real, live student on
   // this device) — same blending pattern the dashboard already used before this rework.
-  const wenboExamReady = (state.vault||[]).length;
+  // Only his SOCIAL STUDIES exam-ready answers count here, matching the subject lock.
+  const wenboSSExamReady = (state.vault||[]).filter(v=>v.subjectKey==="SS").length;
 
-  function classProgress(id){
-    const d = TEACHER_CLASS_DATA[id];
-    const examReadyWritten = d.progress.examReadyWritten || d.examReady.reduce((s,r)=>s+r.examReadyCount,0);
-    return { newIdeas:d.progress.newIdeas, misconceptionsCorrected:d.progress.misconceptionsCorrected,
-      examReadyWritten: examReadyWritten + (id==="p6a"? wenboExamReady : 0),
-      explainedIndependently:d.progress.explainedIndependently };
+  function classExamReady(id){
+    const r = TEACHER_CLASS_DATA[id].examReady;
+    const bonus = id==="p6a" ? wenboSSExamReady : 0;
+    return { answerCount: r.answerCount + bonus, examReadyCount: r.examReadyCount + bonus };
   }
 
   const progress = classIds.reduce(function(acc,id){
-    const p = classProgress(id);
-    acc.newIdeas += p.newIdeas; acc.misconceptionsCorrected += p.misconceptionsCorrected;
-    acc.examReadyWritten += p.examReadyWritten; acc.explainedIndependently += p.explainedIndependently;
+    const d = TEACHER_CLASS_DATA[id];
+    const er = classExamReady(id);
+    acc.newIdeas += d.progress.newIdeas; acc.misconceptionsCorrected += d.progress.misconceptionsCorrected;
+    acc.examReadyWritten += er.examReadyCount; acc.explainedIndependently += d.progress.explainedIndependently;
     return acc;
   }, {newIdeas:0, misconceptionsCorrected:0, examReadyWritten:0, explainedIndependently:0});
 
@@ -847,14 +900,14 @@ function getTeacherDashboardData(classId){
         .sort(function(a,b){ return b.classCount - a.classCount; })
     : TEACHER_CLASS_DATA[classId].misconceptions.map(function(m){ return {title:m.title, pct:m.pct}; });
 
-  const examReadyBySubject = {};
-  classIds.forEach(function(id){
-    TEACHER_CLASS_DATA[id].examReady.forEach(function(r){
-      if(!examReadyBySubject[r.subject]) examReadyBySubject[r.subject] = {subject:r.subject, answerCount:0, examReadyCount:0};
-      examReadyBySubject[r.subject].answerCount += r.answerCount;
-      examReadyBySubject[r.subject].examReadyCount += r.examReadyCount;
-    });
+  // Exam Ready Answers — this teacher's ONE subject only. Overview shows a
+  // per-CLASS breakdown (subject is fixed, so subject-breakdown no longer applies);
+  // a specific class shows a single total for that class.
+  const examReadyByClass = classIds.map(function(id){
+    const er = classExamReady(id);
+    return Object.assign({classId:id, classLabel:TEACHER_CLASSES.find(c=>c.id===id).label}, er);
   });
+  const examReadyTotal = examReadyByClass.reduce(function(acc,r){ acc.answerCount+=r.answerCount; acc.examReadyCount+=r.examReadyCount; return acc; }, {answerCount:0, examReadyCount:0});
 
   return {
     isOverview: isOverview,
@@ -863,7 +916,8 @@ function getTeacherDashboardData(classId){
     noticed: noticed,
     encourage: encourage,
     misconceptions: misconceptions,
-    examReady: Object.keys(examReadyBySubject).map(function(k){ return examReadyBySubject[k]; }),
+    examReadyTotal: examReadyTotal,
+    examReadyByClass: examReadyByClass,
   };
 }
 
@@ -1028,7 +1082,7 @@ function stateSnapshot(){
     thinkingTurn: state.thinkingTurn, thinkingHistory: state.thinkingHistory, thinkingHistoryQid: state.thinkingHistoryQid, questionDemand: state.questionDemand,
     usedClarification: state.usedClarification, awaitingFinalAnswer: state.awaitingFinalAnswer,
     thinkingDraft: state.thinkingDraft, improveDraft: state.improveDraft,
-    teacherClassId: state.teacherClassId, teacherStudentName: state.teacherStudentName };
+    teacherClassId: state.teacherClassId, teacherStudentName: state.teacherStudentName, teacherProgressMetric: state.teacherProgressMetric };
 }
 function goto(view, extra){
   requestSeq++; // invalidate any in-flight request from the screen we're leaving
@@ -1075,6 +1129,7 @@ async function render(){
   else if(state.view==="improvements") html = viewImprovements();
   else if(state.view==="teacherDashboard") html = viewTeacherDashboard();
   else if(state.view==="teacherStudentDetail") html = viewTeacherStudentDetail();
+  else if(state.view==="teacherProgressDetail") html = viewTeacherProgressDetail();
   else if(state.view==="thinking") html = viewThinking();
 
   host.innerHTML = html;
@@ -2026,6 +2081,7 @@ function viewImprovements(){
 
 /* ---- Teacher Dashboard (confidence dashboard) ---- */
 function setTeacherClass(classId){ state.teacherClassId = classId; render(); }
+function openTeacherMetric(metric){ goto('teacherProgressDetail', {teacherProgressMetric:metric}); }
 
 function viewTeacherDashboard(){
   const classId = state.teacherClassId || "overview";
@@ -2040,13 +2096,18 @@ function viewTeacherDashboard(){
     ? "Your students are becoming more exam-ready every week."
     : d.classLabel+" is becoming more exam-ready every week.";
 
+  // Only 3 of the 4 metrics (excluding Exam-Ready, already its own dedicated
+  // section below) open a Summary -> Detail -> Learning insight page.
   const progressCards = [
-    { icon:"leaf", tint:"green", val:d.progress.newIdeas, label:"New ideas understood" },
-    { icon:"bulb", tint:"blue", val:d.progress.misconceptionsCorrected, label:"Misconceptions corrected" },
-    { icon:"star", tint:"amber", val:d.progress.examReadyWritten, label:"Exam-ready answers written" },
-    { icon:"brain", tint:"purple", val:d.progress.explainedIndependently, label:"Answers explained independently" },
+    { icon:"leaf", tint:"green", val:d.progress.newIdeas, label:"New ideas understood", metric:"newIdeas" },
+    { icon:"bulb", tint:"blue", val:d.progress.misconceptionsCorrected, label:"Misconceptions corrected", metric:"misconceptionsCorrected" },
+    { icon:"star", tint:"amber", val:d.progress.examReadyWritten, label:"Exam-ready answers written", metric:null },
+    { icon:"brain", tint:"purple", val:d.progress.explainedIndependently, label:"Answers explained independently", metric:"explainedIndependently" },
   ].map(function(c){
-    return '<div class="growth-card tint-'+c.tint+'"><div class="gc-icon">'+dicon(c.icon,26)+'</div><div class="gc-number">'+c.val+'</div><div class="gc-label">'+c.label+'</div></div>';
+    const clickable = c.metric ? ' t-clickable" onclick="openTeacherMetric(\''+c.metric+'\')' : '';
+    return '<div class="growth-card tint-'+c.tint+clickable+'"><div class="gc-icon">'+dicon(c.icon,26)+'</div><div class="gc-number">'+c.val+'</div><div class="gc-label">'+c.label+'</div>'+
+      (c.metric ? '<div class="t-tap-hint">Tap to see what\'s behind this →</div>' : '')+
+    '</div>';
   }).join("");
 
   const noticedHtml = d.noticed.map(function(n){
@@ -2068,16 +2129,21 @@ function viewTeacherDashboard(){
     return '<div class="t-misc-row"><span class="t-misc-title">'+m.title+'</span><span class="t-misc-meta">'+meta+'</span></div>';
   }).join("");
 
-  const SUBJECT_ICON2 = { "Science":"flask", "English":"book", "Social Studies":"globe" };
-  const examReadyHtml = d.examReady.map(function(r){
-    return '<div class="er-row"><span class="er-icon">'+dicon(SUBJECT_ICON2[r.subject]||"book",20)+'</span><span class="er-name">'+r.subject+'</span>'+
-      '<span class="t-er-counts"><b>'+r.examReadyCount+'</b> of '+r.answerCount+'</span></div>';
-  }).join("");
+  // Exam Ready Answers — this teacher's ONE subject only (Social Studies). Overview
+  // shows a per-class breakdown; a specific class shows one clear total.
+  const examReadyHtml = d.isOverview
+    ? d.examReadyByClass.map(function(r){
+        return '<div class="er-row"><span class="er-icon">'+dicon(TEACHER_PROFILE.subjectIcon,20)+'</span><span class="er-name">'+r.classLabel+'</span>'+
+          '<span class="t-er-counts"><b>'+r.examReadyCount+'</b> of '+r.answerCount+'</span></div>';
+      }).join("")
+    : '<div class="er-row"><span class="er-icon">'+dicon(TEACHER_PROFILE.subjectIcon,20)+'</span><span class="er-name">'+d.classLabel+'</span>'+
+        '<span class="t-er-counts"><b>'+d.examReadyTotal.examReadyCount+'</b> of '+d.examReadyTotal.answerCount+'</span></div>';
 
   return '<div class="dash-shell">'+
     '<div class="dash-welcome-refined">'+teacherAvatar(64)+
       '<div><h1>Welcome back, Ms. Lim!</h1><p>'+heroSub+'</p></div>'+
     '</div>'+
+    '<div class="t-workspace-context"><span class="t-workspace-chip">'+dicon(TEACHER_PROFILE.subjectIcon,15)+' '+TEACHER_PROFILE.levelRange+' · '+TEACHER_PROFILE.subject+'</span></div>'+
     '<div class="class-tabs">'+tabs+'</div>'+
 
     '<h3 class="t-section-title" style="margin-top:0;">This Term\'s Class Progress — '+d.classLabel+'</h3>'+
@@ -2096,15 +2162,48 @@ function viewTeacherDashboard(){
 
     '<div class="t-insights-card">'+
       '<div class="t-head"><span class="t-badge">'+dicon('bulb',24)+'</span><h3>Teaching Insights</h3></div>'+
-      '<p class="hint">Most common misconceptions'+(d.isOverview?' across your classes':'')+'.</p>'+
+      '<p class="hint">Most common misconceptions in your '+TEACHER_PROFILE.subject+' classes.</p>'+
       miscHtml+
     '</div>'+
 
     '<div class="examready-card-refined">'+
       '<div class="er-head"><span class="er-badge">'+dicon('star',24)+'</span><h3>Exam Ready Answers</h3></div>'+
-      '<p class="hint">How much exam-ready writing is being produced.</p>'+
+      '<p class="hint">How much exam-ready '+TEACHER_PROFILE.subject+' writing is being produced.</p>'+
       examReadyHtml+
     '</div>'+
+  '</div>';
+}
+
+/* ---- Teacher: Class Progress Metric Detail — Summary -> Detail -> Learning
+   insight. Concept/skill-level information only, never raw answers or Thinking
+   Cycle conversations. ---- */
+function viewTeacherProgressDetail(){
+  const metric = state.teacherProgressMetric;
+  const classId = state.teacherClassId || "overview";
+  const info = TEACHER_METRIC_DETAIL[metric];
+  const d = getTeacherDashboardData(classId);
+  if(!info){ return '<div class="card"><p>Not found.</p><button class="btn btn-ghost" onclick="goto(\'teacherDashboard\')">Back to Dashboard</button></div>'; }
+
+  const insight = info.insightByClass[d.isOverview ? "overview" : classId];
+  const classIds = d.isOverview ? TEACHER_CLASSES.map(c=>c.id) : [classId];
+
+  let itemsHtml;
+  if(metric === "misconceptionsCorrected"){
+    itemsHtml = classIds.map(function(id){
+      const items = info.itemsByClass[id] || [];
+      if(!items.length) return "";
+      return items.map(function(it){ return '<div class="detail-item"><b>'+it.title+'</b><span>'+it.note+'</span></div>'; }).join("");
+    }).join("");
+  } else {
+    const allItems = [].concat.apply([], classIds.map(function(id){ return info.itemsByClass[id] || []; }));
+    itemsHtml = allItems.map(function(t){ return '<div class="learned-item">'+t+'</div>'; }).join("");
+  }
+
+  return '<div class="card">'+
+    '<h1 class="title">'+info.label+' — '+d.classLabel+'</h1>'+
+    '<div class="t-insight-banner">'+insight+'</div>'+
+    itemsHtml+
+    '<button class="btn btn-ghost" style="margin-top:20px;" onclick="goto(\'teacherDashboard\')">Back to Dashboard</button>'+
   '</div>';
 }
 
@@ -2134,6 +2233,7 @@ window.enterAsStudent = enterAsStudent; window.enterAsTeacher = enterAsTeacher; 
 window.submitThinkingReply = submitThinkingReply;
 window.goToNextQuestion = goToNextQuestion;
 window.LEVELS = LEVELS; window.SUBJECT_META = SUBJECT_META; window.LEVEL_LABEL = LEVEL_LABEL;
+window.TEACHER_PROFILE = TEACHER_PROFILE; window.TEACHER_CLASSES = TEACHER_CLASSES; window.TEACHER_CLASS_DATA = TEACHER_CLASS_DATA;
 
 (async function init(){
   try{
