@@ -8,6 +8,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -170,6 +171,42 @@
   .dash-empty-refined{background:linear-gradient(155deg,var(--brand-light),#fff 75%);border:1px solid var(--brand-light-b);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:40px 30px;text-align:center;}
   .dash-empty-refined h3{margin:0 0 8px;color:var(--brand-deep);font-size:20px;font-weight:800;}
   .dash-empty-refined p{margin:0 0 22px;color:var(--ink);font-size:15px;}
+
+  /* ---- Teacher Dashboard (confidence dashboard — reuses the Student Dashboard's
+     component language: dash-shell tokens, growth-card, noticed-card-refined,
+     examready-card-refined. New pieces below are specific to teacher content. ---- */
+  .t-section-title{margin:var(--ds-lg) 0 14px;font-size:17px;font-weight:800;color:var(--ink);}
+  .class-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:var(--ds-lg);}
+  .class-tab{border:1.5px solid var(--border);background:#fff;color:var(--muted);border-radius:11px;padding:10px 18px;font-weight:700;font-size:13.5px;cursor:pointer;transition:background .12s,color .12s,border-color .12s;}
+  .class-tab:hover{border-color:var(--brand);color:var(--ink);}
+  .class-tab.active{background:var(--brand);color:#fff;border-color:var(--brand-dark);}
+  .growth-card.tint-purple{background:#EFE9FA;border-color:#D9CBF2;}
+  .growth-card.tint-purple .gc-icon{color:#6B4FA0;}
+  .t-progress-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--ds-sm);margin-bottom:var(--ds-md);}
+  @media(max-width:900px){.t-progress-grid{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:480px){.t-progress-grid{grid-template-columns:1fr;}}
+  .t-encourage-wrap{margin-bottom:var(--ds-md);}
+  .t-encourage-hint{margin:0 0 14px;color:var(--muted);font-size:14px;}
+  .t-encourage-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--ds-sm);}
+  @media(max-width:760px){.t-encourage-grid{grid-template-columns:1fr;}}
+  .t-encourage-card{border-radius:var(--card-radius);box-shadow:var(--card-shadow);border:1px solid var(--border);padding:20px 20px 18px;cursor:pointer;transition:transform .12s,box-shadow .12s;background:#fff;}
+  .t-encourage-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(24,36,32,.12);}
+  .t-encourage-name{font-size:16px;font-weight:800;color:var(--ink);margin-bottom:6px;}
+  .t-encourage-status{font-size:12px;font-weight:700;color:var(--brand-deep);background:var(--brand-light);display:inline-block;padding:3px 10px;border-radius:20px;margin-bottom:10px;}
+  .t-encourage-focus{font-size:14px;color:var(--muted);}
+  .t-insights-card{background:linear-gradient(155deg,#E3EEFB,#fff 70%);border:1px solid #c7ddf5;border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:30px 32px;margin-bottom:var(--ds-md);}
+  .t-insights-card .t-head{display:flex;align-items:center;gap:14px;margin-bottom:5px;}
+  .t-insights-card .t-badge{width:48px;height:48px;border-radius:14px;background:#1D5A9E;color:#fff;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 4px 12px rgba(29,90,158,.3);}
+  .t-insights-card h3{margin:0;font-size:19px;font-weight:800;color:#1D5A9E;}
+  .t-insights-card p.hint{margin:5px 0 20px;color:var(--ink);opacity:.65;font-size:14.5px;}
+  .t-misc-row{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;border-radius:13px;background:rgba(255,255,255,.65);margin-bottom:9px;}
+  .t-misc-title{font-size:14.5px;font-weight:700;color:var(--ink);}
+  .t-misc-meta{font-size:13px;font-weight:700;color:#1D5A9E;white-space:nowrap;margin-left:14px;}
+  .t-er-counts{font-size:14.5px;font-weight:700;color:#8a5c14;}
+  .t-er-counts b{font-size:19px;font-weight:800;}
+  .t-detail-row{display:flex;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid var(--border);font-size:15px;}
+  .t-detail-row .t-detail-label{color:var(--muted);font-weight:600;}
+  .t-detail-row .t-detail-val{color:var(--ink);font-weight:700;text-align:right;}
 
   .learned-subject{margin-bottom:24px;}
   .learned-subject h3{margin:0 0 10px;color:var(--ink);font-size:16px;font-weight:800;}
@@ -601,7 +638,7 @@ const LEVELS = {
 let state = { view:"entry", level:null, subjectKey:null, lessonId:null, currentQuestion:null,
   answerDraft:"", feedback:null, loading:false, validating:false, error:null, toast:null, vault:[], selectedVaultIds:[],
   thinkingTurn:0, thinkingHistory:[], thinkingHistoryQid:null, questionDemand:null, usedClarification:false, awaitingFinalAnswer:false,
-  thinkingDraft:"", improveDraft:"" };
+  thinkingDraft:"", improveDraft:"", teacherClassId:"overview", teacherStudentName:null };
 
 // Bumped on every navigation (goto/popstate) and captured at the start of every submission.
 // A submit function checks its own captured id against this after each await; if they no
@@ -664,17 +701,172 @@ function teacherAvatar(size){
     '<circle cx="67" cy="51" r="4.5" fill="#F4A98C" opacity="0.4"/>'+
   '</svg>';
 }
-const TEACHER_ROSTER = [
-  {name:"Aisyah Rahman", time:145, mastery:78},
-  {name:"Marcus Tan", time:62, mastery:51},
-  {name:"Priya Nair", time:210, mastery:88},
-  {name:"Jayden Ong", time:30, mastery:22},
-  {name:"Nur Fatimah", time:118, mastery:69},
-  {name:"Ryan Koh", time:95, mastery:60},
-  {name:"Divya Suresh", time:175, mastery:82},
-  {name:"Ethan Goh", time:40, mastery:35},
-  {name:"Hafiz Ismail", time:88, mastery:55},
+/* =====================================================================
+   TEACHER DASHBOARD — data model (confidence dashboard, not a grading dashboard)
+   =====================================================================
+   Per the brief: never show time-spent/login-count/comparative rankings/labels.
+   Sharon teaches 3 classes. P6-A is her real class (Wenbo Lee is the one real,
+   live student on this device — blended into an otherwise-fictional roster, same
+   pattern the app already used before this rework). P5 Orchid and P5 Lily are
+   additional fictional demo classes so the class-tab architecture and cross-class
+   "Teaching Insights" aggregation have something real to demonstrate.
+
+   Everything reads through getTeacherDashboardData(classId) — a single provider
+   boundary (per the brief's "getDashboardData()" guidance) so the UI never knows
+   mock vs real, and a future real backend only has to change what's INSIDE this
+   function, never the views that call it. */
+
+const TEACHER_CLASSES = [
+  { id:"p6a", label:"P6-A", level:"P6" },
+  { id:"p5orchid", label:"P5 Orchid", level:"P5" },
+  { id:"p5lily", label:"P5 Lily", level:"P5" },
 ];
+
+const TEACHER_CLASS_DATA = {
+  p6a: {
+    rosterNames: ["Aisyah Rahman","Marcus Tan","Priya Nair","Jayden Ong","Nur Fatimah","Ryan Koh","Divya Suresh","Ethan Goh","Hafiz Ismail"],
+    progress: { newIdeas: 128, misconceptionsCorrected: 34, examReadyWritten: 0 /* computed: real Wenbo vault + mock */, explainedIndependently: 49 },
+    noticed: [
+      "More students are explaining their thinking before writing.",
+      "Fewer students are repeating the same misconceptions in Social Studies.",
+      "More students are completing Thinking Cycles independently, without needing a nudge.",
+    ],
+    encourage: [
+      { name:"Ryan Koh", focus:"Friction and Force" },
+      { name:"Nur Fatimah", focus:"Supporting answers with evidence" },
+      { name:"Jayden Ong", focus:"Comparing ideas" },
+    ],
+    misconceptions: [
+      { title:"Evaporation vs Boiling", pct:41 },
+      { title:"Push vs Force", pct:28 },
+      { title:"Supporting answers with evidence", pct:22 },
+    ],
+    examReady: [
+      { subject:"Science", answerCount:64, examReadyCount:22 },
+      { subject:"English", answerCount:58, examReadyCount:19 },
+      { subject:"Social Studies", answerCount:71, examReadyCount:25 },
+    ],
+  },
+  p5orchid: {
+    rosterNames: ["Wei Ling Chua","Farah Aziz","Kai Xuan Lim","Devan Raj","Michelle Ho","Zul Hakim","Bella Wong","Aravind Kumar"],
+    progress: { newIdeas: 96, misconceptionsCorrected: 21, examReadyWritten: 41, explainedIndependently: 33 },
+    noticed: [
+      "Students are changing their first answers less often after reflecting.",
+      "More students are giving a reason before their answer, not just after.",
+      "Fewer students are guessing when a question feels unfamiliar.",
+    ],
+    encourage: [
+      { name:"Devan Raj", focus:"Evaporation and boiling" },
+      { name:"Bella Wong", focus:"Reading the whole question before answering" },
+    ],
+    misconceptions: [
+      { title:"Evaporation vs Boiling", pct:36 },
+      { title:"Subject-verb agreement", pct:19 },
+    ],
+    examReady: [
+      { subject:"Science", answerCount:47, examReadyCount:16 },
+      { subject:"English", answerCount:52, examReadyCount:18 },
+      { subject:"Social Studies", answerCount:38, examReadyCount:11 },
+    ],
+  },
+  p5lily: {
+    rosterNames: ["Shervon Tan","Amirah Yusof","Ken Osei","Natalie Pereira","Rayyan Ismail","Xin Yi Koh","Daniel Prakash"],
+    progress: { newIdeas: 74, misconceptionsCorrected: 17, examReadyWritten: 29, explainedIndependently: 22 },
+    noticed: [
+      "More students are comparing two ideas before choosing an answer.",
+      "Fewer students are repeating the same misconception after one correction.",
+    ],
+    encourage: [
+      { name:"Rayyan Ismail", focus:"Push vs Force" },
+      { name:"Xin Yi Koh", focus:"Explaining why an answer is correct" },
+    ],
+    misconceptions: [
+      { title:"Push vs Force", pct:31 },
+      { title:"Countries vs Ethnic Groups", pct:24 },
+    ],
+    examReady: [
+      { subject:"Science", answerCount:33, examReadyCount:9 },
+      { subject:"English", answerCount:29, examReadyCount:12 },
+      { subject:"Social Studies", answerCount:26, examReadyCount:8 },
+    ],
+  },
+};
+
+// "Students to Encourage" detail view — deliberately minimal per the brief (no raw
+// answers, no Thinking Cycle transcripts). Keyed by student name.
+const TEACHER_STUDENT_DETAIL = {
+  "Ryan Koh": { focus:"Friction and Force", progress:"Improving", noticed:"Still needs more practice explaining how friction changes in different situations." },
+  "Nur Fatimah": { focus:"Supporting answers with evidence", progress:"Improving", noticed:"Getting closer to full marks — now needs one more piece of evidence per answer." },
+  "Jayden Ong": { focus:"Comparing ideas", progress:"Just getting started", noticed:"Beginning to notice differences between similar ideas, with some guidance." },
+  "Devan Raj": { focus:"Evaporation and boiling", progress:"Improving", noticed:"Understands the words now, still mixes up which one happens where." },
+  "Bella Wong": { focus:"Reading the whole question before answering", progress:"Just getting started", noticed:"Often answers part of the question — encourage a full re-read before writing." },
+  "Rayyan Ismail": { focus:"Push vs Force", progress:"Improving", noticed:"Can describe a push, still developing the more general idea of force." },
+  "Xin Yi Koh": { focus:"Explaining why an answer is correct", progress:"Just getting started", noticed:"Answers are often right — the reasoning behind them is the next step." },
+};
+
+// Deterministic — real application logic, not AI, per the brief (section 14).
+function getTeacherDashboardData(classId){
+  const isOverview = !classId || classId === "overview";
+  const classIds = isOverview ? TEACHER_CLASSES.map(c=>c.id) : [classId];
+
+  // Real Wenbo Lee data blended into P6-A only (he's the one real, live student on
+  // this device) — same blending pattern the dashboard already used before this rework.
+  const wenboExamReady = (state.vault||[]).length;
+
+  function classProgress(id){
+    const d = TEACHER_CLASS_DATA[id];
+    const examReadyWritten = d.progress.examReadyWritten || d.examReady.reduce((s,r)=>s+r.examReadyCount,0);
+    return { newIdeas:d.progress.newIdeas, misconceptionsCorrected:d.progress.misconceptionsCorrected,
+      examReadyWritten: examReadyWritten + (id==="p6a"? wenboExamReady : 0),
+      explainedIndependently:d.progress.explainedIndependently };
+  }
+
+  const progress = classIds.reduce(function(acc,id){
+    const p = classProgress(id);
+    acc.newIdeas += p.newIdeas; acc.misconceptionsCorrected += p.misconceptionsCorrected;
+    acc.examReadyWritten += p.examReadyWritten; acc.explainedIndependently += p.explainedIndependently;
+    return acc;
+  }, {newIdeas:0, misconceptionsCorrected:0, examReadyWritten:0, explainedIndependently:0});
+
+  const noticed = [].concat.apply([], classIds.map(function(id){ return TEACHER_CLASS_DATA[id].noticed; })).slice(0,4);
+
+  const encourage = [].concat.apply([], classIds.map(function(id){
+    return TEACHER_CLASS_DATA[id].encourage.map(function(e){ return Object.assign({classId:id, classLabel:TEACHER_CLASSES.find(c=>c.id===id).label}, e); });
+  })).slice(0,3);
+
+  // "Seen in N classes" — a genuine deterministic aggregation across each class's
+  // own misconception list, sorted by how widespread it is (most classes first).
+  const misconceptionCounts = {};
+  classIds.forEach(function(id){
+    TEACHER_CLASS_DATA[id].misconceptions.forEach(function(m){
+      misconceptionCounts[m.title] = (misconceptionCounts[m.title]||0) + 1;
+    });
+  });
+  const misconceptions = isOverview
+    ? Object.keys(misconceptionCounts).map(function(title){ return {title:title, classCount:misconceptionCounts[title]}; })
+        .sort(function(a,b){ return b.classCount - a.classCount; })
+    : TEACHER_CLASS_DATA[classId].misconceptions.map(function(m){ return {title:m.title, pct:m.pct}; });
+
+  const examReadyBySubject = {};
+  classIds.forEach(function(id){
+    TEACHER_CLASS_DATA[id].examReady.forEach(function(r){
+      if(!examReadyBySubject[r.subject]) examReadyBySubject[r.subject] = {subject:r.subject, answerCount:0, examReadyCount:0};
+      examReadyBySubject[r.subject].answerCount += r.answerCount;
+      examReadyBySubject[r.subject].examReadyCount += r.examReadyCount;
+    });
+  });
+
+  return {
+    isOverview: isOverview,
+    classLabel: isOverview ? "All Classes" : TEACHER_CLASSES.find(c=>c.id===classId).label,
+    progress: progress,
+    noticed: noticed,
+    encourage: encourage,
+    misconceptions: misconceptions,
+    examReady: Object.keys(examReadyBySubject).map(function(k){ return examReadyBySubject[k]; }),
+  };
+}
+
 function saveLastLesson(level, subjectKey, lessonId){ sSet("lastLesson", {level:level, subjectKey:subjectKey, lessonId:lessonId}); }
 // Hero "Practice Now" — reuses the existing continue-where-you-left-off tracking
 // (lastLesson, already saved by goto() every time a question bank is visited) rather
@@ -835,7 +1027,8 @@ function stateSnapshot(){
     currentQuestion: state.currentQuestion, answerDraft: state.answerDraft, feedback: state.feedback,
     thinkingTurn: state.thinkingTurn, thinkingHistory: state.thinkingHistory, thinkingHistoryQid: state.thinkingHistoryQid, questionDemand: state.questionDemand,
     usedClarification: state.usedClarification, awaitingFinalAnswer: state.awaitingFinalAnswer,
-    thinkingDraft: state.thinkingDraft, improveDraft: state.improveDraft };
+    thinkingDraft: state.thinkingDraft, improveDraft: state.improveDraft,
+    teacherClassId: state.teacherClassId, teacherStudentName: state.teacherStudentName };
 }
 function goto(view, extra){
   requestSeq++; // invalidate any in-flight request from the screen we're leaving
@@ -857,7 +1050,7 @@ function toast(msg){ state.toast=msg; render(); setTimeout(()=>{ state.toast=nul
 /* ---------- Render ---------- */
 async function render(){
   const app = document.getElementById("app");
-  app.classList.toggle("app-wide", state.view === "dashboard");
+  app.classList.toggle("app-wide", state.view === "dashboard" || state.view === "teacherDashboard");
   app.innerHTML = topbar() + (state.toast? '<div class="badge" style="position:fixed;top:16px;right:16px;background:var(--brand-deep);color:#fff;border-color:var(--brand-deep);padding:8px 16px;z-index:99;">'+state.toast+'</div>':"") + '<div id="viewhost"></div>';
   const host = document.getElementById("viewhost");
   host.innerHTML = '<div class="loading"><div class="spinner"></div>Loading…</div>';
@@ -881,6 +1074,7 @@ async function render(){
   else if(state.view==="misconceptions") html = viewMisconceptions();
   else if(state.view==="improvements") html = viewImprovements();
   else if(state.view==="teacherDashboard") html = viewTeacherDashboard();
+  else if(state.view==="teacherStudentDetail") html = viewTeacherStudentDetail();
   else if(state.view==="thinking") html = viewThinking();
 
   host.innerHTML = html;
@@ -1830,39 +2024,104 @@ function viewImprovements(){
   '</div>';
 }
 
-/* ---- Teacher Dashboard ---- */
-function viewTeacherDashboard(){
-  const wenboTimeMin = Math.round(getTimeSpent("week")/60);
-  const wenboMastery = computeOverallMastery(state.level || "P6");
-  const fullRoster = TEACHER_ROSTER.concat([{name:"Wenbo Lee", time:wenboTimeMin, mastery:wenboMastery, live:true}]);
+/* ---- Teacher Dashboard (confidence dashboard) ---- */
+function setTeacherClass(classId){ state.teacherClassId = classId; render(); }
 
-  const avgTime = Math.round(fullRoster.reduce((s,r)=>s+r.time,0)/fullRoster.length);
-  const avgMastery = Math.round(fullRoster.reduce((s,r)=>s+r.mastery,0)/fullRoster.length);
-  const maxTime = Math.max.apply(null, fullRoster.map(r=>r.time));
-  const rows = fullRoster.map(function(s){
-    let badge = '<span class="qmeta">On track</span>';
-    if(s.time === maxTime && s.time > 0){ badge = '<span class="status done">Most Active</span>'; }
-    else if(s.mastery <= avgMastery-20){ badge = '<span class="status review">Below Avg</span>'; }
-    const nameLabel = s.name + (s.live? ' <span class="qmeta">(live)</span>':"");
-    return '<div class="qrow" style="cursor:default;">'+
-      '<div class="qtext">'+nameLabel+'</div>'+
-      '<div class="qmeta" style="min-width:80px;text-align:right;">'+s.time+'m this wk</div>'+
-      '<div class="qmeta" style="min-width:66px;text-align:right;">'+s.mastery+'/100</div>'+
-      '<div style="min-width:100px;text-align:right;">'+badge+'</div>'+
-    '</div>';
+function viewTeacherDashboard(){
+  const classId = state.teacherClassId || "overview";
+  const d = getTeacherDashboardData(classId);
+
+  const tabs = '<button class="class-tab'+(classId==="overview"?" active":"")+'" onclick="setTeacherClass(\'overview\')">Overview</button>'+
+    TEACHER_CLASSES.map(function(c){
+      return '<button class="class-tab'+(classId===c.id?" active":"")+'" onclick="setTeacherClass(\''+c.id+'\')">'+c.label+'</button>';
+    }).join("");
+
+  const heroSub = d.isOverview
+    ? "Your students are becoming more exam-ready every week."
+    : d.classLabel+" is becoming more exam-ready every week.";
+
+  const progressCards = [
+    { icon:"leaf", tint:"green", val:d.progress.newIdeas, label:"New ideas understood" },
+    { icon:"bulb", tint:"blue", val:d.progress.misconceptionsCorrected, label:"Misconceptions corrected" },
+    { icon:"star", tint:"amber", val:d.progress.examReadyWritten, label:"Exam-ready answers written" },
+    { icon:"brain", tint:"purple", val:d.progress.explainedIndependently, label:"Answers explained independently" },
+  ].map(function(c){
+    return '<div class="growth-card tint-'+c.tint+'"><div class="gc-icon">'+dicon(c.icon,26)+'</div><div class="gc-number">'+c.val+'</div><div class="gc-label">'+c.label+'</div></div>';
   }).join("");
 
+  const noticedHtml = d.noticed.map(function(n){
+    return '<div class="noticed-item-refined"><span class="ni-mark">✓</span><span>'+n+'</span></div>';
+  }).join("");
+
+  const encourageHtml = d.encourage.length
+    ? d.encourage.map(function(e){
+        return '<div class="t-encourage-card" onclick="goto(\'teacherStudentDetail\',{teacherStudentName:\''+e.name+'\'})">'+
+          '<div class="t-encourage-name">'+e.name+'</div>'+
+          '<div class="t-encourage-status">Still practising</div>'+
+          '<div class="t-encourage-focus">'+e.focus+'</div>'+
+        '</div>';
+      }).join("")
+    : '<p class="qmeta">No one flagged right now — nice work!</p>';
+
+  const miscHtml = d.misconceptions.map(function(m){
+    const meta = d.isOverview ? ("Seen in "+m.classCount+" class"+(m.classCount>1?"es":"")) : (m.pct+"% of the class");
+    return '<div class="t-misc-row"><span class="t-misc-title">'+m.title+'</span><span class="t-misc-meta">'+meta+'</span></div>';
+  }).join("");
+
+  const SUBJECT_ICON2 = { "Science":"flask", "English":"book", "Social Studies":"globe" };
+  const examReadyHtml = d.examReady.map(function(r){
+    return '<div class="er-row"><span class="er-icon">'+dicon(SUBJECT_ICON2[r.subject]||"book",20)+'</span><span class="er-name">'+r.subject+'</span>'+
+      '<span class="t-er-counts"><b>'+r.examReadyCount+'</b> of '+r.answerCount+'</span></div>';
+  }).join("");
+
+  return '<div class="dash-shell">'+
+    '<div class="dash-welcome-refined">'+teacherAvatar(64)+
+      '<div><h1>Welcome back, Ms. Lim!</h1><p>'+heroSub+'</p></div>'+
+    '</div>'+
+    '<div class="class-tabs">'+tabs+'</div>'+
+
+    '<h3 class="t-section-title" style="margin-top:0;">This Term\'s Class Progress — '+d.classLabel+'</h3>'+
+    '<div class="t-progress-grid">'+progressCards+'</div>'+
+
+    '<div class="noticed-card-refined">'+
+      '<div class="noticed-head"><span class="nh-badge">'+dicon('eye',24)+'</span><h3>Ethixo Noticed</h3></div>'+
+      '<div class="noticed-list">'+noticedHtml+'</div>'+
+    '</div>'+
+
+    '<div class="t-encourage-wrap">'+
+      '<h3 class="t-section-title">Students to Encourage</h3>'+
+      '<p class="t-encourage-hint">Who may benefit from a little more encouragement right now?</p>'+
+      '<div class="t-encourage-grid">'+encourageHtml+'</div>'+
+    '</div>'+
+
+    '<div class="t-insights-card">'+
+      '<div class="t-head"><span class="t-badge">'+dicon('bulb',24)+'</span><h3>Teaching Insights</h3></div>'+
+      '<p class="hint">Most common misconceptions'+(d.isOverview?' across your classes':'')+'.</p>'+
+      miscHtml+
+    '</div>'+
+
+    '<div class="examready-card-refined">'+
+      '<div class="er-head"><span class="er-badge">'+dicon('star',24)+'</span><h3>Exam Ready Answers</h3></div>'+
+      '<p class="hint">How much exam-ready writing is being produced.</p>'+
+      examReadyHtml+
+    '</div>'+
+  '</div>';
+}
+
+/* ---- Teacher: Student Detail (minimal, per the brief — no raw answers, no
+   Thinking Cycle transcripts, no rankings, no permanent ability labels) ---- */
+function viewTeacherStudentDetail(){
+  const name = state.teacherStudentName;
+  const info = TEACHER_STUDENT_DETAIL[name] || { focus:"—", progress:"—", noticed:"No details available yet." };
   return '<div class="card">'+
-    '<div class="dash-hero">'+teacherAvatar(72)+
-      '<div><div class="pname2">Sharon Lim</div><div class="plast2">Teacher · Social Science · P6-A</div></div>'+
+    '<h1 class="title">'+name+'</h1>'+
+    '<div class="t-detail-row"><span class="t-detail-label">Current focus</span><span class="t-detail-val">'+info.focus+'</span></div>'+
+    '<div class="t-detail-row"><span class="t-detail-label">Recent progress</span><span class="t-detail-val">'+info.progress+'</span></div>'+
+    '<div class="noticed-card-refined" style="margin-top:22px;">'+
+      '<div class="noticed-head"><span class="nh-badge">'+dicon('eye',24)+'</span><h3>Ethixo Noticed</h3></div>'+
+      '<div class="noticed-list"><div class="noticed-item-refined"><span class="ni-mark">✓</span><span>'+info.noticed+'</span></div></div>'+
     '</div>'+
-    '<div class="hintbox" style="margin:16px 0;">This is a demo roster — most students shown are fictional. Wenbo Lee\'s row reflects real activity tracked on this device.</div>'+
-    '<div class="statgrid" style="grid-template-columns:repeat(2,1fr);">'+
-      '<div class="statcard"><div class="sval">'+avgTime+'m</div><div class="slabel">Avg. time this week</div></div>'+
-      '<div class="statcard"><div class="sval">'+avgMastery+'/100</div><div class="slabel">Class avg. mastery</div></div>'+
-    '</div>'+
-    '<h3 style="margin:18px 0 12px;color:var(--ink);">Class Roster — P6-A</h3>'+
-    '<div style="border:1px solid var(--border);border-radius:14px;padding:4px 14px;">'+rows+'</div>'+
+    '<button class="btn btn-ghost" style="margin-top:22px;" onclick="goto(\'teacherDashboard\')">Back to Dashboard</button>'+
   '</div>';
 }
 
