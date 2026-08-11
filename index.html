@@ -10,6 +10,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -203,8 +204,10 @@
   .t-misc-row{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;border-radius:13px;background:rgba(255,255,255,.65);margin-bottom:9px;}
   .t-misc-title{font-size:14.5px;font-weight:700;color:var(--ink);}
   .t-misc-meta{font-size:13px;font-weight:700;color:#1D5A9E;white-space:nowrap;margin-left:14px;}
-  .t-er-counts{font-size:14.5px;font-weight:700;color:#8a5c14;}
-  .t-er-counts b{font-size:19px;font-weight:800;}
+  .t-er-counts{display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
+  .t-er-counts .t-er-frac{font-size:16px;font-weight:800;color:#8a5c14;white-space:nowrap;}
+  .t-er-counts .t-er-frac b{font-size:20px;font-weight:800;}
+  .t-er-counts .t-er-caption{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap;}
   .t-detail-row{display:flex;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid var(--border);font-size:15px;}
   .t-detail-row .t-detail-label{color:var(--muted);font-weight:600;}
   .t-detail-row .t-detail-val{color:var(--ink);font-weight:700;text-align:right;}
@@ -725,6 +728,13 @@ function teacherAvatar(size){
    Orchid and P5 Lily are additional fictional demo classes so the class-tab
    architecture and cross-class "Teaching Insights" aggregation have something
    real to demonstrate.
+
+   examReady.answerCount = the number of written answers ASSESSED/submitted so
+   far for that class this term — NEVER the total number of questions available
+   in the Question Bank. examReadyCount is how many of those assessed answers
+   scored well enough to count as exam-ready. The UI always shows both numbers
+   together with an explicit "exam-ready answers" caption so this can't be
+   misread as "N of M questions in the bank".
 
    Everything reads through getTeacherDashboardData(classId) — a single provider
    boundary so the UI never knows mock vs real, and a future real backend only
@@ -2129,15 +2139,18 @@ function viewTeacherDashboard(){
     return '<div class="t-misc-row"><span class="t-misc-title">'+m.title+'</span><span class="t-misc-meta">'+meta+'</span></div>';
   }).join("");
 
-  // Exam Ready Answers — this teacher's ONE subject only (Social Studies). Overview
-  // shows a per-class breakdown; a specific class shows one clear total.
+  // Exam Ready Answers — this teacher's ONE subject only (Social Studies). The
+  // denominator is ASSESSED/submitted written answers for that class, never the
+  // Question Bank's total question count — the caption makes this explicit so a
+  // teacher can't misread it. Overview shows a per-class breakdown; a specific
+  // class shows one clear total. Consistent wording across P6-A/Orchid/Lily.
+  function examReadyCell(label, r){
+    return '<div class="er-row"><span class="er-icon">'+dicon(TEACHER_PROFILE.subjectIcon,20)+'</span><span class="er-name">'+label+'</span>'+
+      '<span class="t-er-counts"><span class="t-er-frac"><b>'+r.examReadyCount+'</b> / '+r.answerCount+'</span><span class="t-er-caption">exam-ready answers</span></span></div>';
+  }
   const examReadyHtml = d.isOverview
-    ? d.examReadyByClass.map(function(r){
-        return '<div class="er-row"><span class="er-icon">'+dicon(TEACHER_PROFILE.subjectIcon,20)+'</span><span class="er-name">'+r.classLabel+'</span>'+
-          '<span class="t-er-counts"><b>'+r.examReadyCount+'</b> of '+r.answerCount+'</span></div>';
-      }).join("")
-    : '<div class="er-row"><span class="er-icon">'+dicon(TEACHER_PROFILE.subjectIcon,20)+'</span><span class="er-name">'+d.classLabel+'</span>'+
-        '<span class="t-er-counts"><b>'+d.examReadyTotal.examReadyCount+'</b> of '+d.examReadyTotal.answerCount+'</span></div>';
+    ? d.examReadyByClass.map(function(r){ return examReadyCell(r.classLabel, r); }).join("")
+    : examReadyCell(d.classLabel, d.examReadyTotal);
 
   return '<div class="dash-shell">'+
     '<div class="dash-welcome-refined">'+teacherAvatar(64)+
@@ -2168,7 +2181,7 @@ function viewTeacherDashboard(){
 
     '<div class="examready-card-refined">'+
       '<div class="er-head"><span class="er-badge">'+dicon('star',24)+'</span><h3>Exam Ready Answers</h3></div>'+
-      '<p class="hint">How much exam-ready '+TEACHER_PROFILE.subject+' writing is being produced.</p>'+
+      '<p class="hint">Of the '+TEACHER_PROFILE.subject+' answers assessed so far, how many are exam-ready.</p>'+
       examReadyHtml+
     '</div>'+
   '</div>';
