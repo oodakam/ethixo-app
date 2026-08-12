@@ -11,6 +11,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -213,6 +214,23 @@
   .t-detail-row .t-detail-val{color:var(--ink);font-weight:700;text-align:right;}
   .t-workspace-context{margin-bottom:16px;}
   .t-workspace-chip{display:inline-flex;align-items:center;gap:8px;background:var(--panel);color:var(--muted);font-weight:700;font-size:13px;padding:7px 14px;border-radius:20px;}
+  .teacher-hero-card{position:relative;border-radius:22px;overflow:hidden;margin-bottom:20px;box-shadow:0 2px 8px rgba(24,36,32,.06),0 20px 40px -16px rgba(14,58,38,.22);background:#EAF3EC;height:300px;}
+  .teacher-hero-img{display:block;width:100%;height:100%;object-fit:cover;object-position:center 50%;}
+  .teacher-hero-scrim{position:absolute;inset:0;background:linear-gradient(115deg,rgba(255,255,255,.84) 0%,rgba(255,255,255,.62) 16%,rgba(255,255,255,.22) 28%,rgba(255,255,255,0) 40%);pointer-events:none;}
+  .teacher-hero-text{position:absolute;left:5%;top:12%;max-width:27%;}
+  .teacher-hero-text svg{display:block;margin-bottom:10px;}
+  .teacher-hero-text h1{margin:0 0 7px;font-size:21px;font-weight:800;color:var(--ink);letter-spacing:-.3px;line-height:1.22;}
+  .teacher-hero-text p{margin:0;color:#33433d;font-size:13.5px;font-weight:600;line-height:1.4;}
+  @media(max-width:820px){.teacher-hero-card{height:260px;}.teacher-hero-text{max-width:30%;top:10%;}.teacher-hero-text h1{font-size:18px;}.teacher-hero-text p{font-size:12.5px;}}
+  @media(max-width:560px){
+    .teacher-hero-card{height:170px;}
+    .teacher-hero-img{object-position:center 62%;}
+    .teacher-hero-scrim{background:linear-gradient(180deg,rgba(255,255,255,.94) 0%,rgba(255,255,255,.8) 36%,rgba(255,255,255,.15) 60%,rgba(255,255,255,0) 72%);}
+    .teacher-hero-text{left:0;right:0;top:0;max-width:none;padding:14px 18px 0;}
+    .teacher-hero-text svg{margin-bottom:6px;}
+    .teacher-hero-text h1{font-size:17px;}
+    .teacher-hero-text p{font-size:12px;}
+  }
   .growth-card.t-clickable{cursor:pointer;transition:transform .12s,box-shadow .12s;}
   .growth-card.t-clickable:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(24,36,32,.12);}
   .t-tap-hint{font-size:12px;font-weight:700;color:var(--brand-deep);margin-top:10px;opacity:.85;}
@@ -2153,8 +2171,12 @@ function viewTeacherDashboard(){
     : examReadyCell(d.classLabel, d.examReadyTotal);
 
   return '<div class="dash-shell">'+
-    '<div class="dash-welcome-refined">'+teacherAvatar(64)+
-      '<div><h1>Welcome back, Ms. Lim!</h1><p>'+heroSub+'</p></div>'+
+    '<div class="teacher-hero-card">'+
+      '<img class="teacher-hero-img" src="assets/ethixo_teacher_hero.webp" width="1774" height="887" alt="A warm, sunlit classroom desk with an Ethixo mug, a stack of books, a whiteboard reading &quot;Every Thinker Grows&quot;, and a poster of the Think, Question, Explain, Grow steps." loading="eager" decoding="async">'+
+      '<div class="teacher-hero-scrim"></div>'+
+      '<div class="teacher-hero-text">'+teacherAvatar(40)+
+        '<h1>Good morning, Ms. Lim!</h1><p>'+heroSub+'</p>'+
+      '</div>'+
     '</div>'+
     '<div class="t-workspace-context"><span class="t-workspace-chip">'+dicon(TEACHER_PROFILE.subjectIcon,15)+' '+TEACHER_PROFILE.levelRange+' · '+TEACHER_PROFILE.subject+'</span></div>'+
     '<div class="class-tabs">'+tabs+'</div>'+
