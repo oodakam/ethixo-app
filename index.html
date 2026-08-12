@@ -14,6 +14,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1479,7 +1480,7 @@ async function submitAnswerDirect(ans){
       return;
     }
     state.feedback = fb;
-    priorAttempts.push({ answer:ans, score:fb.score, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
+    priorAttempts.push({ answer:ans, score:fb.score, strengths:fb.strengths, nextSteps:fb.nextSteps, usedThinking: thinkingEvidence.length>0, at:Date.now() });
     await sSet(qKey(q), priorAttempts);
     if(myRequestId !== requestSeq) return; // re-check: navigation could have happened during the sSet await too
     // Thinking Cycle evidence has now been consumed (or was never relevant) — clear it so it
@@ -1729,7 +1730,7 @@ async function submitImprove(){
       return;
     }
     state.feedback = fb; state.answerDraft = ans; state.improveDraft = "";
-    priorAttempts.push({ answer:ans, score:fb.score, strengths:fb.strengths, nextSteps:fb.nextSteps, at:Date.now() });
+    priorAttempts.push({ answer:ans, score:fb.score, strengths:fb.strengths, nextSteps:fb.nextSteps, usedThinking:false, at:Date.now() });
     await sSet(qKey(q), priorAttempts);
     if(myRequestId !== requestSeq) return;
     goto("feedback");
@@ -1869,17 +1870,77 @@ function renderHeroCard(opts){
     '<div class="journey-content-card"><div class="jt-title">'+opts.title+'</div><div class="jt-sub">'+opts.subtitle+'</div>'+btnRow+'</div>'+
   '</div>';
 }
-/* Ethixo's current default Hero illustration (assets/hero-default-production.webp, 1400x700,
-   loaded as a normal static file — never base64 — so the browser can cache it).
-   showActions=true (used on the populated dashboard) adds the Practice Now (primary) +
-   View My Learning Journey (secondary) button pair. Omit/false for the empty-state hero,
-   which intentionally has no buttons of its own (its CTA lives in the message card below). */
-function defaultHeroCard(showActions){
-  return renderHeroCard({
+/* ---- Hero state → artwork/copy config ----
+   Every entry below is one specific learning state the Dashboard Hero can represent.
+   Which entry is actually shown is decided ONLY by pickHeroState() (see the Dashboard
+   data provider section below) — this object never picks itself, and nothing here
+   rotates or randomises. "curiosity" is defined here for completeness/future-readiness
+   but is intentionally never returned by pickHeroState() yet: the current data model has
+   no honest signal that a student is exploring/asking a question (see comment on
+   pickHeroState), and we never fake one. */
+const HERO_STATES = {
+  default: {
     src: "assets/hero-default-production.webp", w: 1400, h: 700,
     alt: "A student stands at a mountain overlook at sunrise, backpack on, looking toward a flag at the summit — a signpost beside them marks ideas, learning, growth and progress along the path.",
-    title: "Your Learning Journey",
-    subtitle: "Every answer moves you one step forward.",
+    title: "Your Learning Journey", subtitle: "Every answer moves you one step forward.",
+  },
+  progress: {
+    src: "assets/hero-progress.webp", w: 1748, h: 900,
+    alt: "A boy paddles a small wooden rowboat steadily across calm water at sunset.",
+    title: "Keep Moving Forward", subtitle: "Every step you take builds on what you learned before.",
+  },
+  persistence: {
+    src: "assets/hero-persistence.webp", w: 1774, h: 887,
+    alt: "A boy climbs a rocky mountainside beside a glowing trail of steps labelled Start, Learn, Practice, Improve and Mastery leading to a flag at the summit, next to a sign reading \u2018Keep going, no matter how slow the progress. Persistence wins.\u2019",
+    title: "Keep Going", subtitle: "Small steps, taken consistently, can take you a long way.",
+  },
+  newConcept: {
+    src: "assets/hero-new-concept.webp", w: 1732, h: 908,
+    alt: "A boy crouches in a forest, thoughtfully examining a small new sprout growing at the base of a mossy tree.",
+    title: "Discover Something New", subtitle: "Every new idea opens the door to deeper understanding.",
+  },
+  examReady: {
+    src: "assets/hero-exam-ready.webp", w: 1735, h: 906,
+    alt: "A boy stands barefoot at the edge of a calm lake at sunset, swim goggles and fins laid out beside him, looking ready to head in.",
+    title: "Be Ready", subtitle: "Practice turns what you know into answers you can trust.",
+  },
+  confidence: {
+    src: "assets/hero-confidence.webp", w: 1722, h: 913,
+    alt: "A boy draws a bow and takes steady aim at a distant target across a sunlit meadow.",
+    title: "Believe in Yourself", subtitle: "When you trust what you know, you can face new challenges with confidence.",
+  },
+  thinking: {
+    src: "assets/hero-thinking.webp", w: 1400, h: 700,
+    alt: "A boy stands at a fork in the road, compass in hand, weighing which of three paths \u2014 mountain, forest or beach \u2014 to take.",
+    title: "Think Before You Answer", subtitle: "Good answers begin with taking a moment to think.",
+  },
+  mastery: {
+    src: "assets/hero-mastery.webp", w: 1400, h: 700,
+    alt: "A boy rides a white horse confidently along a countryside trail beside a stream.",
+    title: "Learn It. Use It.", subtitle: "Mastery grows when understanding becomes something you can use.",
+  },
+  curiosity: { // defined for future use only — see note above; pickHeroState() never returns this yet.
+    src: "assets/hero-curiosity.webp", w: 1400, h: 700,
+    alt: "A boy sits by a tree, watching a butterfly land gently on his fingertip.",
+    title: "Stay Curious", subtitle: "Every question is a chance to discover something new.",
+  },
+  achievement: {
+    src: "assets/hero-achievement.webp", w: 1400, h: 700,
+    alt: "A boy raises both arms in triumph under a \u2018FINISH\u2019 banner on a countryside trail at sunset, with a gold medal lying on the ground beside him.",
+    title: "You Did It!", subtitle: "Every goal you reach is proof of how far you've come.",
+  },
+};
+
+/* Renders the Dashboard Hero for a given state key (one of HERO_STATES above; falls back
+   to "default" for any unknown key). showActions=true (populated dashboard) adds the
+   Practice Now (primary) + View My Learning Journey (secondary) button pair, identical
+   across every state — only the artwork and copy change. showActions=false (empty-state
+   dashboard) renders with no buttons of its own, same as before. */
+function heroCard(stateKey, showActions){
+  const cfg = HERO_STATES[stateKey] || HERO_STATES.default;
+  return renderHeroCard({
+    src: cfg.src, w: cfg.w, h: cfg.h, alt: cfg.alt,
+    title: cfg.title, subtitle: cfg.subtitle,
     primaryLabel: showActions ? "Practice Now" : null,
     primaryOnclick: "resumePractice()",
     secondaryLabel: showActions ? "View My Learning Journey" : null,
@@ -1957,6 +2018,115 @@ function hasAnyActivity(){
   return false;
 }
 
+// Flattens every attempted question across all unlocked levels/subjects/chapters into one
+// list, using the SAME storage keys as hasAnyActivity() above — no new data source, just a
+// richer read of what's already there (score history + timestamps).
+function getAllAttemptRecords(){
+  const out = [];
+  for(const level of Object.keys(LEVELS)){
+    for(const subjKey of Object.keys(LEVELS[level])){
+      const subj = LEVELS[level][subjKey];
+      for(const ch of subj.chapters){
+        if(ch.locked) continue;
+        let chapterQuestionCount = 0;
+        for(const l of ch.lessons){ chapterQuestionCount += l.questions.length; }
+        for(const l of ch.lessons){
+          for(let idx=0; idx<l.questions.length; idx++){
+            const key = "attempts:"+level+":"+subjKey+":"+l.id+":"+idx;
+            const attempts = sGet(key) || [];
+            if(!attempts.length) continue;
+            let latestAt = attempts[0].at || 0;
+            attempts.forEach(function(a){ if((a.at||0) > latestAt) latestAt = a.at; });
+            out.push({
+              level: level, subjectKey: subjKey, chapterId: ch.id, chapterQuestionCount: chapterQuestionCount,
+              lessonId: l.id, idx: idx, q: l.questions[idx], attempts: attempts, latestAt: latestAt
+            });
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/* ---- Dashboard Hero state selection ----
+   Deterministic and state-based only — never random, never a rotating gallery (per the
+   Hero image spec). Every condition below reads real stored data (attempts + ScholarVault);
+   nothing here is invented or assumed about the student. Priority order (highest first,
+   first match wins): Achievement > Mastery > Exam Ready > Confidence > Persistence >
+   Thinking > Curiosity > New Concept > Progress > Default.
+   Curiosity currently has no honest signal in the data model (see HERO_STATES note above)
+   so it is never returned here — that's intentional: a real, lower state is shown instead
+   of a fabricated one. Only called when hasAnyActivity() is true (see viewDashboard). */
+function pickHeroState(){
+  const records = getAllAttemptRecords();
+  if(!records.length) return "default";
+
+  let latest = records[0];
+  records.forEach(function(r){ if(r.latestAt > latest.latestAt) latest = r; });
+  const latestAttempt = latest.attempts[latest.attempts.length-1];
+
+  // 1) Achievement — a meaningful (3+ question) chapter has genuinely just been completed:
+  //    every question in it has reached full marks, the attempt that JUST happened is what
+  //    finished it, AND at least half the chapter's questions reached full marks within
+  //    their first 2 attempts — real evidence of understanding, not just eventual
+  //    brute-force completion. If the data can't support that bar, we fall through:
+  //    Achievement must be earned, never inferred from completion alone.
+  if(attemptScore(latestAttempt) >= latest.q.m){
+    const chapterRecords = records.filter(function(r){
+      return r.level===latest.level && r.subjectKey===latest.subjectKey && r.chapterId===latest.chapterId;
+    });
+    const allQuestionsAttempted = chapterRecords.length === latest.chapterQuestionCount;
+    const allFullMarks = chapterRecords.every(function(r){
+      return Math.max.apply(null, r.attempts.map(attemptScore)) >= r.q.m;
+    });
+    if(latest.chapterQuestionCount >= 3 && allQuestionsAttempted && allFullMarks){
+      const efficientCount = chapterRecords.filter(function(r){
+        const firstFullMarksIdx = r.attempts.findIndex(function(a){ return attemptScore(a) >= r.q.m; });
+        return firstFullMarksIdx > -1 && firstFullMarksIdx <= 1; // full marks within the first 2 attempts
+      }).length;
+      if(efficientCount / chapterRecords.length >= 0.5) return "achievement";
+    }
+  }
+
+  // 2) Mastery — sustained, independent understanding across several DIFFERENT questions:
+  //    among the most recently touched questions, at least 3 were full marks on the very
+  //    first attempt (no retry, no nudge needed).
+  const recentRecords = records.slice().sort(function(a,b){ return b.latestAt - a.latestAt; }).slice(0,6);
+  const firstTryMasteryCount = recentRecords.filter(function(r){
+    return r.attempts[0] && attemptScore(r.attempts[0]) >= r.q.m;
+  }).length;
+  if(firstTryMasteryCount >= 3) return "mastery";
+
+  // 3) Exam Ready — real ScholarVault data (already the one field backed by real evidence,
+  //    per the Dashboard data provider notes below).
+  if(getExamReadyStats().total >= 5) return "examReady";
+
+  // 4) Confidence — the most recent question was answered independently and well on the
+  //    very first attempt, no retry needed.
+  if(latest.attempts.length===1 && attemptScore(latestAttempt) >= 0.85*latest.q.m) return "confidence";
+
+  // 5) Persistence — the most recent question has taken multiple attempts and still isn't
+  //    at full marks: the student is struggling but continuing to try.
+  if(latest.attempts.length>=2 && attemptScore(latestAttempt) < latest.q.m) return "persistence";
+
+  // 6) Thinking — the most recent answer was submitted after going through Ethixo's
+  //    Thinking Cycle (real, persisted signal — see submitAnswerDirect).
+  if(latestAttempt.usedThinking === true) return "thinking";
+
+  // 7) Curiosity — intentionally unreachable; no honest signal exists yet (see HERO_STATES).
+
+  // 8) New Concept — this is the very first attempt ever recorded, on the very first
+  //    question touched, in this lesson.
+  const lessonRecords = records.filter(function(r){
+    return r.level===latest.level && r.subjectKey===latest.subjectKey && r.lessonId===latest.lessonId;
+  });
+  if(lessonRecords.length===1 && latest.attempts.length===1) return "newConcept";
+
+  // 9) Progress — activity exists but nothing more specific applies.
+  return "progress";
+}
+
 function getExamReadyStats(){
   const vault = state.vault || [];
   const bySubject = { EN:0, SCI:0, SS:0 };
@@ -1992,7 +2162,7 @@ function viewDashboard(){
       '<div class="dash-welcome-refined">'+wenboAvatar(64)+
         '<div><h1>Welcome, Wenbo!</h1><p>Let\'s get started on becoming a stronger learner.</p></div>'+
       '</div>'+
-      defaultHeroCard()+
+      heroCard('default', false)+
       '<div class="dash-empty-refined">'+
         '<h3>🌱 You\'re just getting started</h3>'+
         '<p>Answer a few questions and Ethixo will start noticing how you learn.</p>'+
@@ -2023,7 +2193,7 @@ function viewDashboard(){
     '<div class="dash-welcome-refined">'+wenboAvatar(64)+
       '<div><h1>Welcome back, Wenbo!</h1><p>This term, you\'re becoming a stronger learner.</p></div>'+
     '</div>'+
-    defaultHeroCard(true)+
+    heroCard(pickHeroState(), true)+
     '<div class="noticed-card-refined">'+
       '<div class="noticed-head"><span class="nh-badge">'+dicon('eye',24)+'</span><h3>Ethixo Noticed</h3></div>'+
       '<div class="noticed-list">'+noticedHtml+'</div>'+
