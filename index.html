@@ -21,6 +21,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1860,11 +1861,14 @@ function toggleVaultSel(qid, checked){
 }
 function viewPrint(){
   const items = state.selectedVaultIds.length? state.vault.filter(v=>state.selectedVaultIds.includes(v.qid)) : state.vault;
-  const rows = items.map(v=>'<div style="margin-bottom:22px;padding-bottom:16px;border-bottom:1px solid #ddd;">'+
+  const rows = items.map(v=>{
+    const displayAnswer = v.examReadyAnswer || v.answer; // same stored string shown on Feedback — never regenerated here
+    return '<div style="margin-bottom:22px;padding-bottom:16px;border-bottom:1px solid #ddd;">'+
     '<div style="font-weight:700;color:var(--ink);">'+v.t+' <span style="font-weight:400;color:#888;font-size:12px;">('+v.m+' Marks)</span></div>'+
-    '<div style="margin:8px 0;white-space:pre-wrap;">'+v.answer+'</div>'+
+    '<div style="margin:8px 0;white-space:pre-wrap;">'+displayAnswer+'</div>'+
     '<div style="font-size:12px;color:#888;">Estimated score: '+attemptScore(v)+'/'+v.m+'</div>'+
-  '</div>').join("");
+  '</div>';
+  }).join("");
   return '<div class="card">'+
     '<div class="noprint row between" style="margin-bottom:16px;">'+
       '<button class="btn btn-ghost" onclick="history.back()">Back</button>'+
@@ -1896,7 +1900,8 @@ function downloadPDF(){
     doc.text(qLines, marginX, y); y += qLines.length*15 + 4;
 
     doc.setFont("helvetica","normal"); doc.setFontSize(11); doc.setTextColor(60,70,66);
-    const aLines = doc.splitTextToSize(v.answer, pageW);
+    const displayAnswer = v.examReadyAnswer || v.answer; // same stored string shown on Feedback — never regenerated here
+    const aLines = doc.splitTextToSize(displayAnswer, pageW);
     if(y + aLines.length*13 > pageH-70){ doc.addPage(); y=60; }
     doc.text(aLines, marginX, y); y += aLines.length*13 + 8;
 
