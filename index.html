@@ -17,6 +17,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1959,44 +1960,114 @@ function heroCard(stateKey, showActions){
 }
 
 /* ---------- Dashboard data provider ----------
-   Single abstraction boundary (per ChatGPT Bro's guidance): the Dashboard UI reads ONLY
-   from getDashboardData() and never knows whether a field is mock or real. Today, most
-   fields are well-crafted mock content (Phase 1 — Growth Log / real learner modelling is
-   explicitly deferred to Phase 2, after the student pilot). "examReady" is the one field
-   already backed by REAL data (ScholarVault), since that storage already exists.
-   Swapping mock internals for a real Growth Log later only touches this function. */
-const DASH_NOTICED_MOCK = [
-  { id:"noticed-explain", text:"You now explain your answers instead of guessing." },
-  { id:"noticed-persist", text:"You rarely give up after making a mistake." },
-  { id:"noticed-reflect", text:"You're beginning to think before changing your answer." },
-];
-const DASH_GROWTH_MOCK = {
-  newIdeasCount: 18,
-  bySubject: {
-    EN: ["Figurative language", "Subject-verb agreement", "Tenses and verb forms", "Synonyms in context", "Editing for clarity", "Persuasive writing openers"],
-    SCI: ["How friction can be reduced", "Why plants need sunlight", "States of matter", "How adaptations help survival", "Forces and motion", "Simple food chains"],
-    SS: ["Why Singapore became a port city", "How trade connects Southeast Asia", "What makes a community diverse", "Roles in early settlements", "Cultural traditions in the region", "How transport links people together"],
+   Single abstraction boundary: the Dashboard UI reads ONLY from getDashboardData() and
+   never knows whether a field is mock or real. "examReady" is backed by real ScholarVault
+   data. Growth/Noticed/Misconceptions/Thinking below are ALSO now fully derived from real
+   attempt history (getAllAttemptRecords()) — no seed/demo content remains in any of these
+   sections. Every sentence Ethixo shows must trace to specific recorded attempts; if the
+   evidence bar isn't met, the section shows fewer items or an honest empty state instead
+   of inventing content. See the per-section functions below for the exact evidence rule
+   each one applies. */
+
+// A single correct answer that took several tries: minimum evidence that a concept now
+// "makes sense" — anything less (never attempted, or attempted but never gotten right) does
+// not qualify. Used by Growth (newIdeas) below.
+function reachedFullMarks(record){
+  return record.attempts.some(function(a){ return attemptScore(a) >= record.q.m; });
+}
+
+// "What You've Learned This Term" — ONLY lessons where the student has real, recorded
+// evidence of getting a question fully right. Deduplicated per lesson (one entry per
+// lesson, not per question) so a lesson doesn't appear twice just because two of its
+// questions were both answered correctly. Subjects with zero qualifying lessons get an
+// empty array — the UI must not show that subject's section at all (see viewLearned()).
+function getRealGrowthData(){
+  const records = getAllAttemptRecords();
+  const bySubject = { EN: [], SCI: [], SS: [] };
+  const seenLessons = {}; // dedupe key: subjectKey|lessonId
+  records.forEach(function(r){
+    if(!reachedFullMarks(r)) return;
+    const key = r.subjectKey+"|"+r.lessonId;
+    if(seenLessons[key]) return;
+    seenLessons[key] = true;
+    if(bySubject[r.subjectKey]) bySubject[r.subjectKey].push(r.lessonTitle || r.q.t);
+  });
+  const newIdeasCount = bySubject.EN.length + bySubject.SCI.length + bySubject.SS.length;
+  return { newIdeasCount: newIdeasCount, bySubject: bySubject };
+}
+
+// "Misunderstandings Corrected" — requires ALL THREE, per real recorded attempts on the
+// SAME question: (1) the student encountered the question, (2) an early attempt scored
+// under half marks (real evidence of a misunderstanding — not just "not perfect"), and
+// (3) a LATER attempt reached full marks (real evidence the misunderstanding resolved).
+// No fabricated misconception names — the lesson title plus the factual before/after score
+// pattern is what's actually known, so that's exactly what's shown.
+function getRealMisconceptionsData(){
+  const records = getAllAttemptRecords();
+  const items = [];
+  records.forEach(function(r){
+    const struggledIdx = r.attempts.findIndex(function(a){ return attemptScore(a) < 0.5*r.q.m; });
+    if(struggledIdx === -1) return;
+    const laterFullMarksIdx = r.attempts.findIndex(function(a, i){ return i > struggledIdx && attemptScore(a) >= r.q.m; });
+    if(laterFullMarksIdx === -1) return;
+    items.push({
+      title: r.lessonTitle || r.q.t,
+      body: "Your first answer needed more explanation — your later answer reached full marks.",
+    });
+  });
+  return { count: items.length, items: items };
+}
+
+// "Ethixo Noticed" / "Thinking Improvements" both need REPEATED evidence — one question is
+// never enough for a behavioural claim. Each signal below counts DISTINCT QUESTIONS (not
+// raw attempts, so replaying one question repeatedly can't manufacture evidence) and only
+// qualifies once it clears its own minimum bar.
+const BEHAVIOUR_MIN_EVIDENCE = 3;
+function getBehaviourSignals(){
+  const records = getAllAttemptRecords();
+
+  const usedThinkingCount = records.filter(function(r){
+    return r.attempts.some(function(a){ return a.usedThinking === true; });
+  }).length;
+
+  const firstTryMasteryCount = records.filter(function(r){
+    return r.attempts[0] && attemptScore(r.attempts[0]) >= r.q.m;
+  }).length;
+
+  const persistedAndImprovedCount = records.filter(function(r){
+    if(r.attempts.length < 2) return false;
+    const first = attemptScore(r.attempts[0]);
+    const best = Math.max.apply(null, r.attempts.map(attemptScore));
+    return best > first;
+  }).length;
+
+  return { usedThinkingCount: usedThinkingCount, firstTryMasteryCount: firstTryMasteryCount, persistedAndImprovedCount: persistedAndImprovedCount };
+}
+
+function getRealNoticedData(){
+  const s = getBehaviourSignals();
+  const candidates = [
+    { id:"noticed-persist", text:"You keep trying instead of giving up after a tricky first attempt.", count: s.persistedAndImprovedCount },
+    { id:"noticed-firsttry", text:"You're reaching full marks on your first try more often.", count: s.firstTryMasteryCount },
+    { id:"noticed-thinking", text:"You're working through your thinking instead of guessing.", count: s.usedThinkingCount },
+  ];
+  return candidates.filter(function(c){ return c.count >= BEHAVIOUR_MIN_EVIDENCE; }).slice(0,3);
+}
+
+// Intentionally minimal for now: the only Thinking-Cycle-specific signal currently
+// persisted per attempt is the usedThinking flag. Richer, more varied thinking-behaviour
+// claims (e.g. "checks evidence before changing an answer") would need the Thinking
+// Cycle's turn-by-turn signals (questionDemand/learningGap) to be persisted per attempt,
+// which they are not yet — that's real future work, not something to fake here.
+function getRealThinkingData(){
+  const s = getBehaviourSignals();
+  const items = [];
+  if(s.usedThinkingCount >= BEHAVIOUR_MIN_EVIDENCE){
+    items.push("You're working through Ethixo's Thinking Cycle instead of guessing.");
   }
-};
-const DASH_MISCONCEPTIONS_MOCK = {
-  items: [
-    { title:"Countries ≠ Ethnic Groups", body:"Now you know the difference between a country and the people who live there." },
-    { title:"Subject-Verb Agreement", body:"Now you consistently choose the correct verb form for the subject." },
-    { title:"Friction Always Slows Things Down", body:"Now you know friction can also help, like gripping the ground when you walk." },
-    { title:"'Bigger Number' Always Means More Marks", body:"Now you know full marks come from clear explanation, not just length." },
-    { title:"Tense Changes Meaning", body:"Now you know changing tense doesn't fix subject-verb agreement on its own." },
-    { title:"An Island Can't Be a Trade Hub", body:"Now you know location near shipping routes matters more than land size." },
-  ]
-};
-const DASH_THINKING_MOCK = {
-  items: [
-    "You now explain why your answers are correct.",
-    "You check evidence before changing your answer.",
-    "You revise your thinking more often.",
-    "You take time to reread the question before answering.",
-    "You compare ideas before settling on one final answer.",
-  ]
-};
+  return { count: items.length, items: items };
+}
+
 // Learning Gap -> Next Step coaching map (per spec: derived from existing Learning Gap
 // categories, no AI call). Phase 1: a single fixed selection stands in for "the student's
 // most frequent recent gap" — that selection logic is real Growth Log work for Phase 2.
@@ -2049,7 +2120,7 @@ function getAllAttemptRecords(){
             attempts.forEach(function(a){ if((a.at||0) > latestAt) latestAt = a.at; });
             out.push({
               level: level, subjectKey: subjKey, chapterId: ch.id, chapterQuestionCount: chapterQuestionCount,
-              lessonId: l.id, idx: idx, q: l.questions[idx], attempts: attempts, latestAt: latestAt
+              lessonId: l.id, lessonTitle: l.title, idx: idx, q: l.questions[idx], attempts: attempts, latestAt: latestAt
             });
           }
         }
@@ -2146,13 +2217,14 @@ function getExamReadyStats(){
 
 function getDashboardData(){
   const seen = sGet(DASH_SEEN_KEY) || [];
-  const noticed = DASH_NOTICED_MOCK.map(function(n){ return { id:n.id, text:n.text, isNew: seen.indexOf(n.id)===-1 }; });
+  const noticedRaw = getRealNoticedData();
+  const noticed = noticedRaw.map(function(n){ return { id:n.id, text:n.text, isNew: seen.indexOf(n.id)===-1 }; });
   return {
     hasActivity: hasAnyActivity(),
     noticed: noticed,
-    growth: DASH_GROWTH_MOCK,
-    misconceptions: { count: DASH_MISCONCEPTIONS_MOCK.items.length, items: DASH_MISCONCEPTIONS_MOCK.items },
-    thinking: { count: DASH_THINKING_MOCK.items.length, items: DASH_THINKING_MOCK.items },
+    growth: getRealGrowthData(),
+    misconceptions: getRealMisconceptionsData(),
+    thinking: getRealThinkingData(),
     nextStep: DASH_NEXT_STEP_MAP[1], // fixed mock selection for Phase 1 (see comment above)
     examReady: getExamReadyStats(),
   };
@@ -2186,12 +2258,14 @@ function viewDashboard(){
   const newIds = d.noticed.filter(function(n){ return n.isNew; }).map(function(n){ return n.id; });
   if(newIds.length) markNoticedSeen(newIds);
 
-  const noticedHtml = d.noticed.map(function(n){
-    return '<div class="noticed-item-refined'+(n.isNew?' new':'')+'">'+
-      '<span class="ni-mark">✓</span><span>'+n.text+'</span>'+
-      (n.isNew?'<span class="ni-badge">New</span>':'')+
-    '</div>';
-  }).join("");
+  const noticedHtml = d.noticed.length
+    ? d.noticed.map(function(n){
+        return '<div class="noticed-item-refined'+(n.isNew?' new':'')+'">'+
+          '<span class="ni-mark">✓</span><span>'+n.text+'</span>'+
+          (n.isNew?'<span class="ni-badge">New</span>':'')+
+        '</div>';
+      }).join("")
+    : '<p class="qmeta">Keep practising — Ethixo needs a few more answers before it can notice a pattern.</p>';
 
   const examTotal = d.examReady.total;
   const SUBJECT_ICON = { EN:"book", SCI:"flask", SS:"globe" };
@@ -2253,14 +2327,15 @@ function viewJourney(){
 
 /* ---- View What You've Learned ---- */
 function viewLearned(){
-  const g = DASH_GROWTH_MOCK;
-  const sections = ["EN","SCI","SS"].map(function(k){
+  const g = getRealGrowthData();
+  const subjectsWithItems = ["EN","SCI","SS"].filter(function(k){ return g.bySubject[k].length > 0; });
+  const sections = subjectsWithItems.map(function(k){
     const items = g.bySubject[k].map(function(t){ return '<div class="learned-item">'+t+'</div>'; }).join("");
     return '<div class="learned-subject"><h3>'+SUBJECT_META[k].name+'</h3>'+items+'</div>';
   }).join("");
   return '<div class="card">'+
     '<h1 class="title">🌱 What You\'ve Learned This Term</h1>'+
-    '<p class="sub">'+g.newIdeasCount+' new ideas now make sense to you.</p>'+
+    '<p class="sub">'+(g.newIdeasCount ? g.newIdeasCount+" new ideas now make sense to you." : "Keep practising — this fills in as you reach full marks on questions.")+'</p>'+
     sections+
     '<button class="btn btn-ghost" onclick="goto(\'dashboard\')">Back to Dashboard</button>'+
   '</div>';
@@ -2268,9 +2343,10 @@ function viewLearned(){
 
 /* ---- Misconceptions Corrected (current term only) ---- */
 function viewMisconceptions(){
-  const items = DASH_MISCONCEPTIONS_MOCK.items.map(function(m){
-    return '<div class="detail-item"><b>'+m.title+'</b><span>'+m.body+'</span></div>';
-  }).join("");
+  const d = getRealMisconceptionsData();
+  const items = d.items.length
+    ? d.items.map(function(m){ return '<div class="detail-item"><b>'+m.title+'</b><span>'+m.body+'</span></div>'; }).join("")
+    : '<p class="qmeta">Nothing here yet — this fills in once a question you found tricky at first is later answered with full marks.</p>';
   return '<div class="card">'+
     '<h1 class="title">💡 Misunderstandings Corrected</h1>'+
     '<p class="sub">This term only.</p>'+
@@ -2281,9 +2357,10 @@ function viewMisconceptions(){
 
 /* ---- Thinking Improvements (current term only) ---- */
 function viewImprovements(){
-  const items = DASH_THINKING_MOCK.items.map(function(t){
-    return '<div class="detail-item"><span>'+t+'</span></div>';
-  }).join("");
+  const d = getRealThinkingData();
+  const items = d.items.length
+    ? d.items.map(function(t){ return '<div class="detail-item"><span>'+t+'</span></div>'; }).join("")
+    : '<p class="qmeta">Nothing here yet — keep practising and Ethixo will start noticing patterns in how you think through answers.</p>';
   return '<div class="card">'+
     '<h1 class="title">🧠 Thinking Improvements</h1>'+
     '<p class="sub">This term only.</p>'+
