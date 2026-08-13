@@ -19,6 +19,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -281,6 +282,11 @@
   .receipt-list li{display:flex;gap:8px;padding:5px 0;font-size:14px;line-height:1.45;color:var(--ink);}
   .receipt-list li::before{content:"🌱";flex:none;}
   .completion-block{margin-top:16px;background:linear-gradient(120deg,var(--brand-light),#fff);border:1.5px solid var(--brand-light-b);border-radius:14px;padding:20px 18px;text-align:center;}
+  .examready-fb-block{margin-top:18px;background:var(--amber-bg);border:1px solid #efd6a4;border-radius:14px;padding:18px 20px;}
+  .examready-fb-block h4{margin:0 0 4px;font-size:14px;color:#8a5c14;display:flex;align-items:center;gap:6px;}
+  .examready-fb-block .erb-hint{margin:0 0 10px;font-size:12.5px;color:var(--muted);}
+  .examready-fb-block .erb-text{margin:0 0 14px;font-size:14.5px;line-height:1.5;color:var(--ink);background:#fff;border-radius:10px;padding:12px 14px;border:1px solid #f3e3bd;}
+  .examready-fb-block .erb-saved{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#8a5c14;}
   .completion-block h3{margin:0 0 6px;font-size:18px;color:var(--brand-deep);}
   .completion-block p{margin:0;font-size:14px;color:var(--ink);}
   .history{border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:16px;background:#fbfcfb;}
@@ -1669,6 +1675,22 @@ function viewFeedback(){
     ? '<div class="completion-block"><h3>🎉 Full Marks — Question Completed!</h3><p>You wrote a complete, well-reasoned answer. Nice work.</p></div>'
     : '<div class="fb-block"><h4>↗ Next Steps to Strengthen Your Answer</h4><ul class="fb-list next">'+fb.nextSteps.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>';
 
+  // Exam Ready Answer — Ethixo's own complete model answer, shown only AFTER the student's
+  // score/coaching feedback above. Not the student's own answer, and never fabricated when
+  // the API didn't actually return one. Saved state is checked against ScholarVault so
+  // re-visiting an already-saved question shows a checkmark rather than risking a duplicate.
+  const alreadySavedExamReady = state.vault.some(function(v){ return v.qid===qKey(q) && v.examReadyAnswer; });
+  const examReadyBlock = (fb.examReadyAnswer && fb.examReadyAnswer.trim())
+    ? '<div class="examready-fb-block">'+
+        '<h4>📝 Exam Ready Answer</h4>'+
+        '<p class="erb-hint">A concise answer you could use in an exam.</p>'+
+        '<p class="erb-text">'+fb.examReadyAnswer+'</p>'+
+        (alreadySavedExamReady
+          ? '<span class="erb-saved">✓ Saved to ScholarVault</span>'
+          : '<button class="btn btn-outline" onclick="saveExamReadyToVault()">⭐ Save to ScholarVault</button>')+
+      '</div>'
+    : "";
+
   const actionButtons = isComplete
     ? '<div class="row">'+
         '<button class="btn btn-ghost" onclick="goto(\'improve\')">Retry Question</button>'+
@@ -1698,6 +1720,7 @@ function viewFeedback(){
       '<hr class="receipt-divider">'+
       '<div class="receipt-block"><h4>🌱 Today\'s Learning</h4><ul class="receipt-list">'+fb.learningReceipt.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>'
       : "")+
+    examReadyBlock+
     '<div class="row between" style="margin-top:24px;">'+
       '<div class="row">'+
         '<button class="btn btn-ghost" onclick="goto(\'qbank\')">Back to Questions</button>'+
@@ -1724,11 +1747,33 @@ async function addToVault(){
     if(!ok) return;
   }
   await loadVault();
-  const item = { qid:qKey(q), level:q.level, subjectKey:q.subjectKey, lessonTitle:q.lessonTitle, t:q.t, m:q.m, answer:state.answerDraft, score:fb.score, savedAt:Date.now() };
+  const existing = state.vault.find(function(v){ return v.qid===qKey(q); });
+  const item = Object.assign({}, existing, { qid:qKey(q), level:q.level, subjectKey:q.subjectKey, lessonTitle:q.lessonTitle, t:q.t, m:q.m, answer:state.answerDraft, score:fb.score, savedAt:Date.now() });
   state.vault = state.vault.filter(v=>v.qid!==item.qid);
   state.vault.push(item);
   await sSet("vault", state.vault);
   toast("Saved to ScholarVault ⭐");
+}
+// Saves Ethixo's own Exam Ready Answer (NOT the student's answer) into the same ScholarVault
+// entry as this question, keyed the same way addToVault() already uses — so saving both the
+// student's answer and the exam-ready answer on the same question merges into ONE entry
+// rather than creating a duplicate, and re-visiting an already-saved question is detected
+// via the same lookup used by the "already saved" check in viewFeedback() above.
+async function saveExamReadyToVault(){
+  const q = state.currentQuestion, fb = state.feedback;
+  if(!fb.examReadyAnswer) return;
+  await loadVault();
+  const existing = state.vault.find(function(v){ return v.qid===qKey(q); });
+  const item = Object.assign({}, existing, {
+    qid:qKey(q), level:q.level, subjectKey:q.subjectKey, lessonTitle:q.lessonTitle, t:q.t, m:q.m,
+    answer: (existing && existing.answer) || state.answerDraft,
+    examReadyAnswer: fb.examReadyAnswer, score:fb.score, savedAt:Date.now(),
+  });
+  state.vault = state.vault.filter(v=>v.qid!==item.qid);
+  state.vault.push(item);
+  await sSet("vault", state.vault);
+  toast("Exam Ready Answer saved ⭐");
+  render();
 }
 
 /* ---- Improve ---- */
