@@ -35,10 +35,9 @@ export default async function handler(req, res) {
       "Do not evaluate the content at all in this case — language check comes first.\n" +
       "STEP 2 — If the answer is in English, assess it as follows:\n" +
       markSchemeBlock +
-      "- NEVER state, imply, or reveal the correct or full answer, whether from the marking scheme or your own knowledge.\n" +
-      "- NEVER rewrite or complete the answer for the student.\n" +
+      "- Within 'strengths' and 'nextSteps' ONLY: NEVER state, imply, or reveal the correct or full answer, whether from the marking scheme or your own knowledge, and NEVER rewrite or complete the answer for the student there.\n" +
       "- Reply with STRICT JSON ONLY — no markdown fences, no commentary before or after — matching exactly:\n" +
-      '{"score": <single integer 0-' + marks + ', your best single estimate, not a range>, "strengths": ["...", "..."], "nextSteps": ["...", "..."], "learningReceipt": ["...", "..."]}\n' +
+      '{"score": <single integer 0-' + marks + ', your best single estimate, not a range>, "strengths": ["...", "..."], "nextSteps": ["...", "..."], "learningReceipt": ["...", "..."], "examReadyAnswer": "..."}\n' +
       "- score: ONE single whole number, like a teacher would give — never a range or two numbers.\n" +
       "- strengths: 1-3 short, specific points on what the student did well, referring to their actual answer.\n" +
       "- nextSteps: 1-3 short guiding prompts (questions or pointers on what KIND of detail/example is missing) that lead the student to improve their own answer, without giving the content away.\n" +
@@ -48,7 +47,14 @@ export default async function handler(req, res) {
       "  Every bullet MUST name the quality and immediately explain, in one short sentence, exactly what the student did to earn it (e.g. \"Great persistence! You stayed with the problem until the meaning became clear.\").\n" +
       "  NEVER use empty praise such as \"Great job!\", \"Brilliant!\", or \"Smart student!\" without that specific evidence attached.\n" +
       "  NEVER invent or assume evidence that is not actually present in the context given to you. If nothing genuine qualifies, return an empty array — do not force it.\n" +
-      "  Tone: warm, teacher-like, specific, short, never repetitive. The goal is to help the student notice and enjoy the FEELING of learning itself (discovering, understanding, improving, persevering) so they want to do it again — not to make them chase praise.";
+      "  Tone: warm, teacher-like, specific, short, never repetitive. The goal is to help the student notice and enjoy the FEELING of learning itself (discovering, understanding, improving, persevering) so they want to do it again — not to make them chase praise.\n" +
+      "- examReadyAnswer: a DELIBERATE EXCEPTION to the 'never reveal' rule above — its entire purpose is to give the student a complete, ready-to-use model answer, shown to them only AFTER their score and coaching feedback. Write it in full; do not hedge or leave it incomplete.\n" +
+      "  It must directly and completely answer the ACTUAL question given above (not the student's specific wording, and not a related-but-different idea).\n" +
+      "  It must fit the " + marks + "-mark allocation: for 1 mark, a concise key phrase or short sentence; for 2 marks, a sentence containing the key supporting reason or example a 2-mark answer needs; for 3 marks, a sufficiently developed response covering the key points a 3-mark answer needs. Let the question and its marks decide the right length — do not force a fixed sentence count.\n" +
+      "  It must NOT simply copy or lightly reword the student's own answer above.\n" +
+      "  It must NOT invent details that are not genuinely relevant to the question.\n" +
+      "  Write in clear, age-appropriate English for a Singapore Primary school student.\n" +
+      "  If a marking scheme was given above, you may use it for accuracy, but write your own natural, complete sentence(s) — do not paste its exact wording verbatim.";
 
     let interactionContext = "";
     if (Array.isArray(thinkingHistory) && thinkingHistory.length) {
@@ -107,6 +113,7 @@ export default async function handler(req, res) {
 
     const parsed = JSON.parse(clean);
     parsed.learningReceipt = Array.isArray(parsed.learningReceipt) ? parsed.learningReceipt.slice(0, 3) : [];
+    parsed.examReadyAnswer = typeof parsed.examReadyAnswer === "string" ? parsed.examReadyAnswer.trim() : "";
     res.status(200).json(parsed);
   } catch (e) {
     res.status(500).json({ error: e.message });
