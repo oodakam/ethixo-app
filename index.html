@@ -20,6 +20,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1675,12 +1676,13 @@ function viewFeedback(){
     ? '<div class="completion-block"><h3>🎉 Full Marks — Question Completed!</h3><p>You wrote a complete, well-reasoned answer. Nice work.</p></div>'
     : '<div class="fb-block"><h4>↗ Next Steps to Strengthen Your Answer</h4><ul class="fb-list next">'+fb.nextSteps.map(s=>'<li>'+s+'</li>').join("")+'</ul></div>';
 
-  // Exam Ready Answer — Ethixo's own complete model answer, shown only AFTER the student's
-  // score/coaching feedback above. Not the student's own answer, and never fabricated when
-  // the API didn't actually return one. Saved state is checked against ScholarVault so
-  // re-visiting an already-saved question shows a checkmark rather than risking a duplicate.
+  // Exam Ready Answer — Ethixo's own complete model answer. CRITICAL GATE: only ever shown
+  // once the student has reached FULL MARKS (isComplete) on this question — never a hint or
+  // teaching aid for an incomplete answer. Reuses the exact same isComplete check the
+  // completion banner above already uses, so "full marks" means the same thing everywhere
+  // on this page. Also never fabricated when the API didn't actually return one.
   const alreadySavedExamReady = state.vault.some(function(v){ return v.qid===qKey(q) && v.examReadyAnswer; });
-  const examReadyBlock = (fb.examReadyAnswer && fb.examReadyAnswer.trim())
+  const examReadyBlock = (isComplete && fb.examReadyAnswer && fb.examReadyAnswer.trim())
     ? '<div class="examready-fb-block">'+
         '<h4>📝 Exam Ready Answer</h4>'+
         '<p class="erb-hint">A concise answer you could use in an exam.</p>'+
@@ -1761,6 +1763,7 @@ async function addToVault(){
 // via the same lookup used by the "already saved" check in viewFeedback() above.
 async function saveExamReadyToVault(){
   const q = state.currentQuestion, fb = state.feedback;
+  if(fb.score < q.m) return; // full marks required — defensive gate, mirrors the UI visibility check above
   if(!fb.examReadyAnswer) return;
   await loadVault();
   const existing = state.vault.find(function(v){ return v.qid===qKey(q); });
