@@ -18,6 +18,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -51,6 +52,10 @@
   .vault-link.active{background:var(--brand-light);color:var(--brand-deep);}
   .crumb{color:var(--muted);font-size:13.5px;margin-bottom:18px;font-weight:500;}
   .crumb b{color:var(--ink);}
+  .crumb-dd{position:relative;display:inline-flex;align-items:center;gap:1px;vertical-align:middle;}
+  .crumb-select{appearance:none;-webkit-appearance:none;-moz-appearance:none;background:transparent;border:none;border-bottom:1.5px dashed var(--border);color:var(--ink);font-weight:700;font-size:13.5px;font-family:inherit;cursor:pointer;padding:0 3px 1px 0;margin:0;max-width:260px;text-overflow:ellipsis;}
+  .crumb-select:hover, .crumb-select:focus{border-bottom-color:var(--brand);outline:none;}
+  .crumb-dd-arrow{color:var(--muted);font-size:9px;pointer-events:none;margin-left:-4px;}
   .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px;}
   .center{text-align:center;}
   h1.title{font-size:27px;color:var(--ink);margin:0 0 6px;font-weight:700;}
@@ -1197,8 +1202,10 @@ function topbar(){
   if(persona === "teacher"){ switchLink = '<button class="vault-link" onclick="switchToStudent()">Switch to Student View</button>'; }
   else if(persona === "student" && onboarded){ switchLink = '<button class="vault-link" onclick="switchToTeacher()">Switch to Teacher View</button>'; }
 
+  const PRACTICE_FLOW_VIEWS = ["subject","lessons","qbank","customQ","answer","feedback","improve","thinking"];
   const studentBtns = (persona==="student")
     ? (onboarded? '<button class="vault-link'+(state.view==="dashboard"?' active':'')+'" onclick="goto(\'dashboard\')">Dashboard</button>':"")+
+      (onboarded? '<button class="vault-link'+(PRACTICE_FLOW_VIEWS.indexOf(state.view)!==-1?' active':'')+'" onclick="goto(\'subject\')">Practice</button>':"")+
       '<button class="vault-link'+(state.view==="plans"?' active':'')+'" onclick="goto(\'plans\')">Plans</button>'+
       '<button class="vault-link'+(state.view==="vault"?' active':'')+'" onclick="goto(\'vault\')">ScholarVault</button>'
     : "";
@@ -1261,6 +1268,35 @@ function chooseLevel(){
 }
 
 /* ---- Subject ---- */
+/* ---- Inline breadcrumb Subject/Topic switcher ----
+   Lets a student jump to a different subject or topic directly from the Lessons or
+   Question Bank screen, without going back to Dashboard first. Reuses the exact same
+   goto() navigation the existing "Change Subject" button (on the Answer/Thinking screens)
+   already relies on — this just exposes it inline, one dropdown per breadcrumb segment. */
+function jumpToSubject(subjectKey){ goto("lessons", {subjectKey: subjectKey}); }
+function jumpToLesson(lessonId){ goto("qbank", {lessonId: lessonId}); }
+function getUnlockedLessonsForSubject(level, subjectKey){
+  const subj = LEVELS[level][subjectKey];
+  const out = [];
+  subj.chapters.forEach(function(ch){
+    if(ch.locked) return;
+    ch.lessons.forEach(function(l){ out.push({id:l.id, title:l.title}); });
+  });
+  return out;
+}
+function subjectSelectHtml(selectedKey){
+  const opts = ["EN","SCI","SS"].map(function(k){
+    return '<option value="'+k+'"'+(k===selectedKey?' selected':'')+'>'+SUBJECT_META[k].name+'</option>';
+  }).join("");
+  return '<span class="crumb-dd"><select class="crumb-select" onchange="jumpToSubject(this.value)">'+opts+'</select><span class="crumb-dd-arrow">▾</span></span>';
+}
+function lessonSelectHtml(level, subjectKey, selectedLessonId){
+  const opts = getUnlockedLessonsForSubject(level, subjectKey).map(function(l){
+    return '<option value="'+l.id+'"'+(l.id===selectedLessonId?' selected':'')+'>'+l.title+'</option>';
+  }).join("");
+  return '<span class="crumb-dd"><select class="crumb-select" onchange="jumpToLesson(this.value)">'+opts+'</select><span class="crumb-dd-arrow">▾</span></span>';
+}
+
 function viewSubject(){
   const card = (key)=>{ const meta=SUBJECT_META[key];
     return '<div class="choice" onclick="goto(\'lessons\',{subjectKey:\''+key+'\'})">'+
@@ -1285,7 +1321,7 @@ function viewLessons(){
       '<div><div class="lt">'+l.title+'</div><div class="lc">'+l.questions.length+' practice questions</div></div><span>›</span></div>').join("");
     return '<div class="chapter"><div class="chapter-head">'+ch.title+'<span>▾</span></div>'+lessons+'</div>';
   }).join("");
-  return '<div class="crumb"><b>'+LEVEL_LABEL[state.level]+'</b> › <b>'+SUBJECT_META[state.subjectKey].name+'</b></div>'+
+  return '<div class="crumb"><b>'+LEVEL_LABEL[state.level]+'</b> › '+subjectSelectHtml(state.subjectKey)+'</div>'+
   '<div class="card"><h1 class="title center">Choose a lesson to practise</h1><div style="margin-top:18px;">'+chapters+'</div></div>';
 }
 
@@ -1319,7 +1355,7 @@ async function viewQBank(){
     '</div>';
   }));
   window.__lessonForBank = lesson;
-  return '<div class="crumb"><b>'+LEVEL_LABEL[state.level]+'</b> › <b>'+SUBJECT_META[state.subjectKey].name+'</b> › <b>'+lesson.title+'</b></div>'+
+  return '<div class="crumb"><b>'+LEVEL_LABEL[state.level]+'</b> › '+subjectSelectHtml(state.subjectKey)+' › '+lessonSelectHtml(state.level, state.subjectKey, lesson.id)+'</div>'+
   '<div class="qpanel"><div>✏️ <b>Practice a question of your choice</b><div class="qmeta" style="margin-top:2px;">Type or paste your own question to begin</div></div>'+
   '<button class="btn btn-outline" onclick="goto(\'customQ\')">Start Writing</button></div>'+
   '<div class="card"><h2 style="margin-top:0;color:var(--ink);">'+lesson.title+'</h2><div class="qmeta" style="margin-bottom:10px;">'+lesson.questions.length+' practice questions</div>'+rows.join("")+'</div>';
