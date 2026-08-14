@@ -22,6 +22,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -29,9 +30,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ethixo — Learn to answer with Clarity</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
     --brand:#00A86B; --brand-dark:#00875A; --brand-deep:#046B4A;
@@ -119,7 +118,6 @@
   #app.app-wide{max-width:1160px;}
   .dash-shell{--ds-xs:10px; --ds-sm:20px; --ds-md:30px; --ds-lg:44px; --card-shadow:0 1px 2px rgba(24,36,32,.04),0 10px 28px -10px rgba(24,36,32,.12); --card-radius:22px;}
   .dash-welcome-refined{display:flex;align-items:center;gap:20px;margin-bottom:var(--ds-lg);}
-  .dash-welcome-refined .dw-avatar{flex:none;}
   .dash-welcome-refined h1{margin:0 0 5px;font-size:32px;font-weight:800;color:var(--ink);letter-spacing:-.4px;}
   .dash-welcome-refined p{margin:0;color:var(--muted);font-size:16px;}
 
@@ -321,17 +319,6 @@
   .profile-chip svg{flex:none;border-radius:50%;}
   .profile-chip .pname{font-size:12px;font-weight:700;color:var(--ink);line-height:1.25;}
   .profile-chip .plast{font-size:9.5px;color:var(--muted);line-height:1.25;}
-  .dash-hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:6px;}
-  .dash-hero svg{flex:none;border-radius:18px;}
-  .dash-hero .pname2{font-size:20px;font-weight:800;color:var(--ink);}
-  .dash-hero .plast2{font-size:13px;color:var(--muted);margin-top:2px;}
-  .statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0;}
-  @media(max-width:640px){.statgrid{grid-template-columns:repeat(2,1fr);}}
-  .statcard{background:var(--brand-light);border:1px solid var(--brand-light-b);border-radius:12px;padding:14px 8px;text-align:center;}
-  .statcard .sval{font-size:19px;font-weight:800;color:var(--brand-deep);}
-  .statcard .slabel{font-size:11px;color:var(--muted);margin-top:3px;}
-  .overallcard{background:var(--brand-light);border:1px solid var(--brand-light-b);border-radius:16px;padding:22px;text-align:center;margin-bottom:22px;}
-  .overallcard .qmeta{font-size:13px;}
   @media print{
     .noprint{display:none!important;}
     body{background:#fff;}
@@ -1002,20 +989,6 @@ function addTimeSpent(seconds){
   log[k] = (log[k]||0) + seconds;
   sSet("timelog", log);
 }
-function getTimeSpent(period){
-  const log = sGet("timelog") || {};
-  const now = new Date();
-  let total = 0;
-  Object.keys(log).forEach(function(dateStr){
-    const secs = log[dateStr];
-    const d = new Date(dateStr+"T00:00:00");
-    if(period==="today"){ if(dateStr===todayKey()) total+=secs; }
-    else if(period==="week"){ const diffDays=Math.floor((now-d)/86400000); if(diffDays>=0 && diffDays<7) total+=secs; }
-    else if(period==="month"){ if(d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth()) total+=secs; }
-    else if(period==="year"){ if(d.getFullYear()===now.getFullYear()) total+=secs; }
-  });
-  return total;
-}
 function formatDuration(seconds){
   seconds = Math.round(seconds||0);
   const h = Math.floor(seconds/3600), m = Math.floor((seconds%3600)/60);
@@ -1037,38 +1010,6 @@ function startHeartbeat(){
   window.addEventListener("beforeunload", function(){ addTimeSpent(Math.round((Date.now()-__lastTick)/1000)); });
 }
 
-/* ---------- Mastery computation (best-score based, independent of ScholarVault save status) ---------- */
-function computeMastery(level, subjectKey){
-  const subj = LEVELS[level][subjectKey];
-  let totalMarks=0, earnedMarks=0, attemptedCount=0, totalCount=0;
-  subj.chapters.forEach(function(ch){
-    if(ch.locked) return;
-    ch.lessons.forEach(function(l){
-      l.questions.forEach(function(q, idx){
-        totalCount++; totalMarks += q.m;
-        const key = "attempts:"+level+":"+subjectKey+":"+l.id+":"+idx;
-        const attempts = sGet(key) || [];
-        if(attempts.length){
-          attemptedCount++;
-          let best = 0;
-          attempts.forEach(function(a){ const s=attemptScore(a); if(s>best) best=s; });
-          earnedMarks += Math.min(best, q.m);
-        }
-      });
-    });
-  });
-  const pct = totalMarks>0 ? Math.round((earnedMarks/totalMarks)*100) : 0;
-  return { pct: pct, earnedMarks: earnedMarks, totalMarks: totalMarks, attemptedCount: attemptedCount, totalCount: totalCount };
-}
-function computeOverallMastery(level){
-  let totalMarks=0, earnedMarks=0;
-  ["EN","SCI","SS"].forEach(function(k){
-    const m = computeMastery(level, k);
-    totalMarks += m.totalMarks; earnedMarks += m.earnedMarks;
-  });
-  return totalMarks>0 ? Math.round((earnedMarks/totalMarks)*100) : 0;
-}
-
 /* ---------- Dashboard chart rendering ---------- */
 function masteryMeterSVG(size, value){
   value = Math.max(0, Math.min(100, value));
@@ -1084,30 +1025,6 @@ function masteryMeterSVG(size, value){
   '</svg>';
 }
 let __subjectChart = null;
-function drawDashboardCharts(){
-  const canvas = document.getElementById('subjectBarChart');
-  if(!canvas || !window.Chart) return;
-  requestAnimationFrame(function(){
-    const en = computeMastery(state.level, "EN").pct;
-    const sci = computeMastery(state.level, "SCI").pct;
-    const ss = computeMastery(state.level, "SS").pct;
-    if(__subjectChart){ __subjectChart.destroy(); }
-    __subjectChart = new Chart(canvas, {
-      type: "bar",
-      data: { labels: ["English","Science","Social Science"],
-        datasets: [{ data: [en, sci, ss], backgroundColor: "#00A86B", borderRadius: 4, barThickness: 22 }] },
-      options: {
-        indexAxis: "y", responsive: true, maintainAspectRatio: false,
-        layout: { padding: { left: 4 } },
-        scales: {
-          x: { min:0, max:100, grid:{color:"#e8e8e8"}, ticks:{color:"#5E6D66", font:{size:11}} },
-          y: { grid:{display:false}, ticks:{color:"#182420", font:{size:12.5}} }
-        },
-        plugins: { legend:{display:false}, tooltip:{enabled:true} }
-      }
-    });
-  });
-}
 
 /* ---------- AI calls — go through OUR OWN secure backend, not directly to Anthropic ---------- */
 async function getAIFeedback(question, marks, answer, modelAnswer, thinkingHistory, priorAttempts){
@@ -1860,6 +1777,7 @@ function toggleVaultSel(qid, checked){
   else state.selectedVaultIds = state.selectedVaultIds.filter(x=>x!==qid);
 }
 function viewPrint(){
+  loadJsPDF(); // kick off the lazy load now (fire-and-forget) so it's likely ready by the time Download PDF is clicked
   const items = state.selectedVaultIds.length? state.vault.filter(v=>state.selectedVaultIds.includes(v.qid)) : state.vault;
   const rows = items.map(v=>{
     const displayAnswer = v.examReadyAnswer || v.answer; // same stored string shown on Feedback — never regenerated here
@@ -1879,9 +1797,27 @@ function viewPrint(){
     (rows || '<p class="qmeta">No answers selected.</p>')+
   '</div>';
 }
-function downloadPDF(){
+// jsPDF (~200KB) is only ever needed for this one Download PDF action, reached from ScholarVault
+// -> Generate Revision Notes -> Download PDF — a rare, late-funnel action. Loading it in <head>
+// on every single page (Dashboard, Answer, Feedback, etc.) was pure waste. This loads it once,
+// on demand, and caches the in-flight promise so concurrent/repeat calls never double-fetch.
+let __jspdfLoadPromise = null;
+function loadJsPDF(){
+  if(window.jspdf) return Promise.resolve();
+  if(__jspdfLoadPromise) return __jspdfLoadPromise;
+  __jspdfLoadPromise = new Promise(function(resolve, reject){
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    s.onload = function(){ resolve(); };
+    s.onerror = function(){ __jspdfLoadPromise = null; reject(new Error("jsPDF failed to load")); };
+    document.head.appendChild(s);
+  });
+  return __jspdfLoadPromise;
+}
+async function downloadPDF(){
   const items = state.selectedVaultIds.length? state.vault.filter(v=>state.selectedVaultIds.includes(v.qid)) : state.vault;
   if(!items.length){ toast("No answers to export"); return; }
+  try{ await loadJsPDF(); }catch(e){ toast("PDF library failed to load"); return; }
   if(!window.jspdf){ toast("PDF library failed to load"); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:"pt", format:"a4" });
@@ -1966,7 +1902,7 @@ function renderHeroCard(opts){
     : "";
   const btnRow = (primaryBtn || secondaryBtn) ? '<div class="journey-cta-row">'+primaryBtn+secondaryBtn+'</div>' : "";
   return '<div class="journey-card-refined">'+
-    '<img class="journey-hero-img" src="'+opts.src+'" width="'+opts.w+'" height="'+opts.h+'" alt="'+opts.alt+'" loading="eager" decoding="async">'+
+    '<img class="journey-hero-img" src="'+opts.src+'" width="'+opts.w+'" height="'+opts.h+'" alt="'+opts.alt+'" loading="eager" fetchpriority="high" decoding="async">'+
     '<div class="journey-content-card"><div class="jt-title">'+opts.title+'</div><div class="jt-sub">'+opts.subtitle+'</div>'+btnRow+'</div>'+
   '</div>';
 }
@@ -2070,8 +2006,8 @@ function reachedFullMarks(record){
 // lesson, not per question) so a lesson doesn't appear twice just because two of its
 // questions were both answered correctly. Subjects with zero qualifying lessons get an
 // empty array — the UI must not show that subject's section at all (see viewLearned()).
-function getRealGrowthData(){
-  const records = getAllAttemptRecords();
+function getRealGrowthData(records){
+  records = records || getAllAttemptRecords();
   const bySubject = { EN: [], SCI: [], SS: [] };
   const seenLessons = {}; // dedupe key: subjectKey|lessonId
   records.forEach(function(r){
@@ -2091,8 +2027,8 @@ function getRealGrowthData(){
 // (3) a LATER attempt reached full marks (real evidence the misunderstanding resolved).
 // No fabricated misconception names — the lesson title plus the factual before/after score
 // pattern is what's actually known, so that's exactly what's shown.
-function getRealMisconceptionsData(){
-  const records = getAllAttemptRecords();
+function getRealMisconceptionsData(records){
+  records = records || getAllAttemptRecords();
   const items = [];
   records.forEach(function(r){
     const struggledIdx = r.attempts.findIndex(function(a){ return attemptScore(a) < 0.5*r.q.m; });
@@ -2112,8 +2048,8 @@ function getRealMisconceptionsData(){
 // raw attempts, so replaying one question repeatedly can't manufacture evidence) and only
 // qualifies once it clears its own minimum bar.
 const BEHAVIOUR_MIN_EVIDENCE = 3;
-function getBehaviourSignals(){
-  const records = getAllAttemptRecords();
+function getBehaviourSignals(records){
+  records = records || getAllAttemptRecords();
 
   const usedThinkingCount = records.filter(function(r){
     return r.attempts.some(function(a){ return a.usedThinking === true; });
@@ -2133,8 +2069,8 @@ function getBehaviourSignals(){
   return { usedThinkingCount: usedThinkingCount, firstTryMasteryCount: firstTryMasteryCount, persistedAndImprovedCount: persistedAndImprovedCount };
 }
 
-function getRealNoticedData(){
-  const s = getBehaviourSignals();
+function getRealNoticedData(records){
+  const s = getBehaviourSignals(records);
   const candidates = [
     { id:"noticed-persist", text:"You keep trying instead of giving up after a tricky first attempt.", count: s.persistedAndImprovedCount },
     { id:"noticed-firsttry", text:"You're reaching full marks on your first try more often.", count: s.firstTryMasteryCount },
@@ -2148,8 +2084,8 @@ function getRealNoticedData(){
 // claims (e.g. "checks evidence before changing an answer") would need the Thinking
 // Cycle's turn-by-turn signals (questionDemand/learningGap) to be persisted per attempt,
 // which they are not yet — that's real future work, not something to fake here.
-function getRealThinkingData(){
-  const s = getBehaviourSignals();
+function getRealThinkingData(records){
+  const s = getBehaviourSignals(records);
   const items = [];
   if(s.usedThinkingCount >= BEHAVIOUR_MIN_EVIDENCE){
     items.push("You're working through Ethixo's Thinking Cycle instead of guessing.");
@@ -2306,14 +2242,15 @@ function getExamReadyStats(){
 
 function getDashboardData(){
   const seen = sGet(DASH_SEEN_KEY) || [];
-  const noticedRaw = getRealNoticedData();
+  const records = getAllAttemptRecords(); // ONE scan, shared below — was previously re-scanned independently up to 5 times per render
+  const noticedRaw = getRealNoticedData(records);
   const noticed = noticedRaw.map(function(n){ return { id:n.id, text:n.text, isNew: seen.indexOf(n.id)===-1 }; });
   return {
-    hasActivity: hasAnyActivity(),
+    hasActivity: records.length > 0,
     noticed: noticed,
-    growth: getRealGrowthData(),
-    misconceptions: getRealMisconceptionsData(),
-    thinking: getRealThinkingData(),
+    growth: getRealGrowthData(records),
+    misconceptions: getRealMisconceptionsData(records),
+    thinking: getRealThinkingData(records),
     nextStep: DASH_NEXT_STEP_MAP[1], // fixed mock selection for Phase 1 (see comment above)
     examReady: getExamReadyStats(),
   };
@@ -2523,7 +2460,7 @@ function viewTeacherDashboard(){
 
   return '<div class="dash-shell">'+
     '<div class="teacher-hero-card">'+
-      '<div class="teacher-hero-img-wrap"><img class="teacher-hero-img" src="assets/ethixo_teacher_hero.webp" width="1774" height="887" alt="A warm, sunlit classroom desk with an Ethixo mug, a stack of books, a whiteboard reading &quot;Every Thinker Grows&quot;, and a poster of the Think, Question, Explain, Grow steps." loading="eager" decoding="async"><div class="teacher-hero-scrim"></div></div>'+
+      '<div class="teacher-hero-img-wrap"><img class="teacher-hero-img" src="assets/ethixo_teacher_hero.webp" width="1774" height="887" alt="A warm, sunlit classroom desk with an Ethixo mug, a stack of books, a whiteboard reading &quot;Every Thinker Grows&quot;, and a poster of the Think, Question, Explain, Grow steps." loading="eager" fetchpriority="high" decoding="async"><div class="teacher-hero-scrim"></div></div>'+
       '<div class="teacher-hero-text">'+teacherAvatar(40)+
         '<div class="teacher-hero-copy"><h1>Good morning, Ms. Lim!</h1><p>'+heroSub+'</p></div>'+
       '</div>'+
