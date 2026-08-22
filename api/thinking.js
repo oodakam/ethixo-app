@@ -36,7 +36,7 @@ export default async function handler(req, res) {
       studentResponse,     // the response being evaluated THIS turn
     } = req.body || {};
 
-    if (!question || !marks || !modelAnswer || !studentResponse || !turnNumber) {
+    if (!question || !marks || !studentResponse || !turnNumber) {
       res.status(400).json({ error: "Missing required fields" });
       return;
     }
@@ -125,9 +125,13 @@ export default async function handler(req, res) {
       ? "Question Demand: not yet established — infer it now (Turn 1)."
       : "Question Demand already established as " + JSON.stringify(questionDemand) + " — reuse it exactly, do not re-derive.";
 
+    const modelAnswerBlock = modelAnswer
+      ? '\nConfidential model answer (never reveal): """' + modelAnswer + '"""\n'
+      : "\nNo official model answer is available for this question (a student-authored custom question) — use your own judgement of what a strong answer at this mark allocation should include.\n";
+
     const user =
       "Question (" + marks + " marks): " + question +
-      '\nConfidential model answer (never reveal): """' + modelAnswer + '"""\n' +
+      modelAnswerBlock +
       questionDemandInstruction + "\n" +
       historyBlock +
       '\nStudent\'s current response (Turn ' + turnNumber + '): """' + studentResponse + '"""\n\n' +
