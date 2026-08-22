@@ -28,6 +28,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -360,6 +361,14 @@
   .vaultrow .vq{font-weight:600;font-size:14px;}
   .vaultmeta{color:var(--muted);font-size:12px;margin-top:3px;}
   .checklabel{display:flex;align-items:flex-start;gap:8px;}
+  .vault-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;}
+  .vault-tab{border:1.5px solid var(--border);background:#fff;color:var(--muted);border-radius:11px;padding:10px 18px;font-weight:700;font-size:13.5px;cursor:pointer;transition:background .12s,color .12s,border-color .12s;}
+  .vault-tab:hover{border-color:var(--brand);color:var(--ink);}
+  .vault-tab.active{background:var(--brand);color:#fff;border-color:var(--brand-dark);}
+  .vault-lesson-group{margin-bottom:20px;}
+  .vault-lesson-group:last-child{margin-bottom:0;}
+  .vault-lesson-heading{font-size:14.5px;font-weight:800;color:var(--ink);margin-bottom:4px;padding-bottom:8px;border-bottom:1.5px solid var(--border);}
+  @media(max-width:480px){.vault-tabs{gap:6px;}.vault-tab{padding:8px 14px;font-size:12.5px;}}
   .pricecard{border:2px solid var(--border);border-radius:var(--radius);padding:26px;text-align:center;background:#fff;}
   .pricecard.hi{border-color:var(--brand);background:var(--brand-light);}
   .pricecard .amt{font-size:30px;font-weight:800;color:var(--ink);margin:10px 0;font-family:'Montserrat',sans-serif;}
@@ -738,7 +747,7 @@ let state = { view:"entry", level:null, subjectKey:null, lessonId:null, currentQ
   answerDraft:"", feedback:null, loading:false, validating:false, error:null, toast:null, vault:[], selectedVaultIds:[],
   thinkingTurn:0, thinkingHistory:[], thinkingHistoryQid:null, questionDemand:null, usedClarification:false, awaitingFinalAnswer:false,
   thinkingDraft:"", improveDraft:"", teacherClassId:"overview", teacherStudentName:null, teacherProgressMetric:null,
-  assignFormSubject:null, assignConfirmed:false };
+  assignFormSubject:null, assignConfirmed:false, vaultTab:"EN" };
 
 // Bumped on every navigation (goto/popstate) and captured at the start of every submission.
 // A submit function checks its own captured id against this after each await; if they no
@@ -1630,11 +1639,12 @@ function privacyNote(){
 
 function viewAnswer(){
   const q = state.currentQuestion;
-  // Bank questions (with a model answer) start the Thinking Cycle on submit — Ethixo is
-  // deciding/thinking, not grading yet, so the loading text should say so. Custom questions
-  // and bank questions without a model answer skip straight to grading (submitAnswerDirect),
-  // where "Reviewing…" is the honest label.
-  const willThink = !(q.custom || !q.a);
+  // Bank questions (with a model answer) AND custom questions now start the Thinking Cycle
+  // on submit — Ethixo is deciding/thinking, not grading yet, so the loading text should say
+  // so. Only bank questions WITHOUT a model answer skip straight to grading
+  // (submitAnswerDirect), where "Reviewing…" is the honest label. Mirrors submitAnswer()'s
+  // routing condition exactly.
+  const willThink = q.custom || !!q.a;
   const loadingLabel = willThink ? "Thinking…" : "Reviewing…";
   return '<div class="crumb"><b>'+LEVEL_LABEL[q.level]+'</b> › <b>'+SUBJECT_META[q.subjectKey].name+'</b> › <b>'+q.lessonTitle+'</b></div>'+
   '<div class="card">'+
@@ -1662,13 +1672,16 @@ async function submitAnswer(){
   state.answerDraft = ans; state.error = null;
 
   const q = state.currentQuestion;
-  if(q.custom || !q.a){
-    // Custom (self-authored) questions have no confidential model answer to ground a
-    // Thinking Cycle on — Phase 1 scope is bank questions only. Unchanged existing flow.
+  if(!q.custom && !q.a){
+    // Bank question with no model answer — unchanged existing behaviour, skip straight to grading.
     return submitAnswerDirect(ans);
   }
 
-  // Bank question -> start the Thinking Cycle (Phase 1, api/thinking.js), Turn 1.
+  // Bank question with a model answer, OR a custom (self-authored) question -> start the
+  // Thinking Cycle (Phase 1, api/thinking.js), Turn 1. Custom questions now go through the
+  // exact same Thinking Cycle as bank questions — api/thinking.js judges against its own
+  // knowledge of the question's demands when no model answer is available, the same way
+  // api/feedback.js already does for custom-question grading.
   state.thinkingTurn = 1;
   state.thinkingHistory = [];
   state.thinkingHistoryQid = qKey(q);
@@ -1838,11 +1851,8 @@ async function submitThinkingReply(){
 /* ---- Feedback ---- */
 function viewFeedback(){
   const q = state.currentQuestion, fb = state.feedback;
-  const pct = fb.score / q.m;
   const isComplete = fb.score >= q.m; // full marks = the question is considered complete, not "still improvable"
-  const saveBtn = (pct >= 0.75)
-    ? '<button class="btn btn-outline" onclick="addToVault()">⭐ Add to ScholarVault</button>'
-    : '<span class="qmeta" style="align-self:center;">Score 75%+ to save to ScholarVault</span>';
+  const saveBtn = '<button class="btn btn-outline" onclick="addToVault()">⭐ Add to ScholarVault</button>';
 
   // Full marks: no "Next Steps" (there is nothing left to strengthen), and no invitation back
   // into another improvement loop — a clear completion banner replaces it instead.
@@ -1917,7 +1927,6 @@ function drawGaugeIfPresent(){
 async function addToVault(){
   const q = state.currentQuestion, fb = state.feedback;
   const pct = fb.score / q.m;
-  if(pct < 0.75){ toast("Score 75%+ needed to save to ScholarVault"); return; }
   if(pct < 0.90){
     const ok = confirm("You're doing well! You could try to improve this further before saving.\n\nSave this as your final answer anyway?");
     if(!ok) return;
@@ -2010,18 +2019,47 @@ async function submitImprove(){
 }
 
 /* ---- ScholarVault ---- */
+function setVaultTab(subjectKey){ state.vaultTab = subjectKey; render(); }
+
 function viewVault(){
-  const rows = state.vault.slice().reverse().map((v)=>'<div class="vaultrow">'+
-      '<label class="checklabel">'+
-        '<input type="checkbox" data-qid="'+v.qid+'" onchange="toggleVaultSel(\''+v.qid+'\',this.checked)">'+
-        '<div><div class="vq">'+v.t+'</div>'+
-        '<div class="vaultmeta">'+LEVEL_LABEL[v.level]+' · '+SUBJECT_META[v.subjectKey].name+' · '+v.lessonTitle+' · '+v.m+' Marks · Score '+attemptScore(v)+' · Saved '+new Date(v.savedAt).toLocaleDateString()+'</div></div>'+
-      '</label>'+
-    '</div>').join("");
+  const activeTab = (state.vaultTab && SUBJECT_META[state.vaultTab]) ? state.vaultTab : "EN";
+  const tabsHtml = ["EN","SCI","SS"].map(function(k){
+    return '<button class="vault-tab'+(k===activeTab?' active':'')+'" onclick="setVaultTab(\''+k+'\')">'+SUBJECT_META[k].name+'</button>';
+  }).join("");
+
+  const itemsForSubject = state.vault.filter(function(v){ return v.subjectKey===activeTab; });
+
+  // Group by lesson (stable identity: lessonId), most-recently-saved lesson first; within
+  // each lesson, most-recently-saved answer first — same ordering feel as the original
+  // flat "most recent first" list, just organized hierarchically now.
+  const lessonOrder = [];
+  const byLesson = {};
+  itemsForSubject.forEach(function(v){
+    if(!byLesson[v.lessonId]){ byLesson[v.lessonId] = []; lessonOrder.push(v.lessonId); }
+    byLesson[v.lessonId].push(v);
+  });
+  lessonOrder.forEach(function(id){ byLesson[id].sort(function(a,b){ return b.savedAt - a.savedAt; }); });
+  lessonOrder.sort(function(id1,id2){ return byLesson[id2][0].savedAt - byLesson[id1][0].savedAt; });
+
+  const groupsHtml = lessonOrder.map(function(lessonId){
+    const items = byLesson[lessonId];
+    const rows = items.map(function(v){
+      return '<div class="vaultrow">'+
+        '<label class="checklabel">'+
+          '<input type="checkbox" data-qid="'+v.qid+'" onchange="toggleVaultSel(\''+v.qid+'\',this.checked)">'+
+          '<div><div class="vq">'+v.t+'</div>'+
+          '<div class="vaultmeta">'+LEVEL_LABEL[v.level]+' · '+v.m+' Marks · Score '+attemptScore(v)+' · Saved '+new Date(v.savedAt).toLocaleDateString()+'</div></div>'+
+        '</label>'+
+      '</div>';
+    }).join("");
+    return '<div class="vault-lesson-group"><div class="vault-lesson-heading">'+items[0].lessonTitle+'</div>'+rows+'</div>';
+  }).join("");
+
   return '<div class="card">'+
     '<h1 class="title center">ScholarVault</h1>'+
     '<p class="sub center">Your Best Answers. Preserved.</p>'+
-    (state.vault.length? rows : '<p class="qmeta center">No saved answers yet — add one from the Feedback screen.</p>')+
+    '<div class="vault-tabs">'+tabsHtml+'</div>'+
+    (itemsForSubject.length ? groupsHtml : '<p class="qmeta center">No saved answers in '+SUBJECT_META[activeTab].name+' yet — add one from the Feedback screen.</p>')+
     '<div class="row between" style="margin-top:22px;">'+
       '<button class="btn btn-ghost" onclick="history.back()">Back</button>'+
       '<button class="btn btn-primary" onclick="goto(\'printview\')" '+(!state.vault.length?"disabled":"")+'>Generate Revision Notes</button>'+
