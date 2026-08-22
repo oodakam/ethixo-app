@@ -23,6 +23,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -52,6 +53,21 @@
   .vault-link{border:none;color:var(--muted);background:transparent;border-radius:10px;padding:9px 15px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;transition:background .12s,color .12s;}
   .vault-link:hover{background:var(--panel);color:var(--ink);}
   .vault-link.active{background:var(--brand-light);color:var(--brand-deep);}
+  .nav-hamburger{display:none;}
+  /* Comfortable ~44px touch targets on touch-sized viewports, without changing desktop sizing. */
+  @media(max-width:820px){
+    .vault-link{min-height:44px;padding:12px 15px;display:inline-flex;align-items:center;}
+    .growth-card a.gc-view{min-height:44px;display:inline-flex;align-items:center;margin-bottom:-12px;}
+    .journey-cta-primary,.journey-cta-secondary{min-height:44px;}
+  }
+  /* Phone-only: collapse the full nav into a hamburger menu; desktop/tablet nav is untouched. */
+  @media(max-width:560px){
+    .nav-hamburger{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:1.5px solid var(--border);border-radius:10px;background:#fff;color:var(--ink);font-size:19px;cursor:pointer;flex:none;}
+    .topbtns{display:none;width:100%;flex-direction:column;align-items:stretch;gap:6px;order:3;margin-top:8px;padding-top:12px;border-top:1px solid var(--border);}
+    .topbar.nav-open .topbtns{display:flex;}
+    .topbtns .vault-link{width:100%;justify-content:flex-start;padding:13px 14px;}
+    .topbtns .profile-chip{width:100%;box-sizing:border-box;}
+  }
   .crumb{color:var(--muted);font-size:13.5px;margin-bottom:18px;font-weight:500;}
   .crumb b{color:var(--ink);}
   .crumb-dd{position:relative;display:inline-flex;align-items:center;gap:1px;vertical-align:middle;}
@@ -138,7 +154,7 @@
     .journey-content-card .jt-title{font-size:19px;margin-bottom:7px;}
     .journey-content-card .jt-sub{font-size:13.5px;margin-bottom:16px;line-height:1.4;}
     .journey-cta-row{flex-direction:column;gap:9px;}
-    .journey-cta-primary,.journey-cta-secondary{width:100%;text-align:center;padding:12px 16px;font-size:13.5px;}
+    .journey-cta-primary,.journey-cta-secondary{width:100%;text-align:center;padding:14px 16px;font-size:13.5px;}
   }
 
   .noticed-card-refined{background:linear-gradient(155deg,var(--brand-light),#fff 78%);border:1px solid var(--brand-light-b);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:30px 32px;margin-bottom:var(--ds-md);}
@@ -967,7 +983,7 @@ function getTeacherDashboardData(classId){
 }
 
 function saveLastLesson(level, subjectKey, lessonId){ sSet("lastLesson", {level:level, subjectKey:subjectKey, lessonId:lessonId}); }
-// Hero "Practice Now" — reuses the existing continue-where-you-left-off tracking
+// Hero "Continue Learning" — reuses the existing continue-where-you-left-off tracking
 // (lastLesson, already saved by goto() every time a question bank is visited) rather
 // than introducing new navigation logic. Falls back to subject selection if there's
 // no history yet for the student's current level.
@@ -1137,7 +1153,14 @@ function topbar(){
 
   return '<div class="topbar">'+
     '<div class="logo" onclick="goto(\''+homeView+'\')">Ethixo</div>'+
+    '<button class="nav-hamburger" onclick="toggleMobileNav()" aria-label="Menu">☰</button>'+
     '<div class="topbtns">'+profileBlock+switchLink+studentBtns+'</div></div>';
+}
+// Phone-only hamburger toggle — purely a DOM class flip (not a state/render change), so it
+// naturally resets to closed on the next navigation (render() rebuilds the topbar fresh).
+function toggleMobileNav(){
+  const el = document.querySelector(".topbar");
+  if(el) el.classList.toggle("nav-open");
 }
 
 /* ---- Entry (Role Selector) ---- */
@@ -1969,7 +1992,7 @@ const HERO_STATES = {
 
 /* Renders the Dashboard Hero for a given state key (one of HERO_STATES above; falls back
    to "default" for any unknown key). showActions=true (populated dashboard) adds the
-   Practice Now (primary) + View My Learning Journey (secondary) button pair, identical
+   Continue Learning (primary) + View My Learning Journey (secondary) button pair, identical
    across every state — only the artwork and copy change. showActions=false (empty-state
    dashboard) renders with no buttons of its own, same as before. */
 function heroCard(stateKey, showActions){
@@ -1977,7 +2000,7 @@ function heroCard(stateKey, showActions){
   return renderHeroCard({
     src: cfg.src, w: cfg.w, h: cfg.h, alt: cfg.alt,
     title: cfg.title, subtitle: cfg.subtitle,
-    primaryLabel: showActions ? "Practice Now" : null,
+    primaryLabel: showActions ? "Continue Learning" : null,
     primaryOnclick: "resumePractice()",
     secondaryLabel: showActions ? "View My Learning Journey" : null,
     secondaryOnclick: "goto('journey')",
