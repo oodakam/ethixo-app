@@ -27,6 +27,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -176,6 +177,21 @@
   .t-astatus2-new{background:#F7E4E1;color:#9B4A3F;}
   .t-astatus2-progress{background:var(--amber-bg);color:#8a5c14;}
   .t-astatus2-done{background:var(--brand-light);color:var(--brand-deep);}
+  .t-astatus2-needs{background:#E3EEFB;color:#1D5A9E;}
+  /* Teacher-facing per-assignment roster report — a plain list of student rows, not more
+     big cards, so it reads as "how are my students doing with what I assigned" rather
+     than echoing the Student Dashboard's own personal-progress tiles. */
+  .t-areport-wrap{display:flex;flex-direction:column;gap:14px;margin-bottom:var(--ds-md);}
+  .t-areport{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px 20px;box-shadow:var(--card-shadow);}
+  .t-areport-class{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+  .t-areport-lesson{font-size:16px;font-weight:800;color:var(--ink);margin-top:2px;}
+  .t-areport-due{font-size:12.5px;color:var(--muted);margin-top:2px;margin-bottom:12px;}
+  .t-areport-rows{border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:9px;}
+  .t-areport-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;}
+  .t-areport-name{color:var(--ink);font-weight:700;}
+  .t-areport-name.live{color:var(--brand-deep);}
+  .t-areport-status-frac{display:flex;align-items:center;gap:8px;flex:none;}
+  .t-areport-frac{color:var(--muted);font-size:12px;font-weight:700;}
   .t-acard-lesson{font-size:16px;font-weight:800;color:var(--ink);}
   .t-acard-due{font-size:13px;color:var(--muted);margin-top:4px;}
   .noticed-head{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
@@ -1351,6 +1367,49 @@ function getAssignmentStatus(a, studentName){
   return allFullMarks ? "Completed" : "In Progress";
 }
 
+// Real question-count progress for the assigned lesson (e.g. "3/9 questions at full
+// marks") — reuses the exact same attempts:* records as getAssignmentStatus() above, no
+// new tracking. Only meaningful for Wenbo Lee, the one real student on this device.
+function getAssignmentProgressFraction(a){
+  const subj = LEVELS[a.level][a.subjectKey];
+  let questions = [];
+  subj.chapters.forEach(function(ch){
+    ch.lessons.forEach(function(l){ if(l.id===a.lessonId) questions = l.questions; });
+  });
+  let done = 0;
+  questions.forEach(function(q, idx){
+    const attempts = sGet("attempts:"+a.level+":"+a.subjectKey+":"+a.lessonId+":"+idx) || [];
+    const best = attempts.reduce(function(m,att){ return Math.max(m, attemptScore(att)); }, 0);
+    if(best >= q.m) done++;
+  });
+  return { done: done, total: questions.length };
+}
+
+// Canned demo progress for the fictional P6-A roster (everyone except Wenbo Lee). Per the
+// brief: "the exact data can continue to use the existing MVP/demo data structure" — this
+// mirrors the same kind of illustrative demo data already used throughout the rest of the
+// Teacher Dashboard (P5 Orchid/P5 Lily's noticed/misconceptions/encourage content). It is
+// NEVER shown to a student and never presented as real evidence-based tracking — it exists
+// only so the teacher's per-assignment roster view has a realistic, varied class to look
+// at. "fraction" scales to whatever the real assigned lesson's actual question count is.
+const ASSIGN_DEMO_PROGRESS = {
+  "Aisyah Rahman": { status:"Completed", fraction:1 },
+  "Marcus Tan": { status:"In Progress", fraction:0.6 },
+  "Priya Nair": { status:"Not Started", fraction:0 },
+  "Jayden Ong": { status:"Needs Practice", fraction:0.3 },
+  "Nur Fatimah": { status:"Completed", fraction:1 },
+  "Ryan Koh": { status:"In Progress", fraction:0.7 },
+  "Divya Suresh": { status:"Not Started", fraction:0 },
+  "Ethan Goh": { status:"Needs Practice", fraction:0.2 },
+  "Hafiz Ismail": { status:"In Progress", fraction:0.5 },
+};
+const TEACHER_ASTATUS_BADGE = {
+  "Not Started": "t-astatus2-new",
+  "In Progress": "t-astatus2-progress",
+  "Needs Practice": "t-astatus2-needs",
+  "Completed": "t-astatus2-done",
+};
+
 // One shared card, used identically on the Student Dashboard and the Teacher Dashboard's
 // "Assigned Learning" section — same visual states, same status source, same click target
 // (the real existing lesson/practice flow). Status is always Wenbo's real status (the one
@@ -1378,6 +1437,46 @@ function renderAssignedLearningSection(showHeading){
   const heading = showHeading ? '<h3 class="t-section-title" style="margin-top:0;">Assigned Learning</h3>' : "";
   return heading+'<div class="t-acard-wrap">'+assignments.map(renderAssignmentCard).join("")+'</div>';
 }
+
+// Teacher-facing per-assignment report: the class this was assigned to, then one row per
+// student — name, status, and (except for Not Started) a real/demo question-count
+// fraction. Deliberately a plain list, not more big "growth-card"-style tiles, so it
+// doesn't read like the Student Dashboard's own progress cards — this answers "how are MY
+// STUDENTS doing with what I assigned", not "how am I doing as one learner".
+function renderTeacherAssignmentRoster(a){
+  const classLabel = TEACHER_CLASSES.find(function(c){ return c.id===a.classId; });
+  const rosterNames = TEACHER_CLASS_DATA[a.classId].rosterNames;
+  const wenboFrac = getAssignmentProgressFraction(a);
+  const wenboStatus = getAssignmentStatus(a, "Wenbo Lee");
+
+  const rows = rosterNames.map(function(name){
+    const demo = ASSIGN_DEMO_PROGRESS[name] || { status:"Not Started", fraction:0 };
+    const frac = Math.round(demo.fraction * wenboFrac.total);
+    const showFrac = demo.status!=="Not Started";
+    return '<div class="t-areport-row"><span class="t-areport-name">'+name+'</span>'+
+      '<span class="t-areport-status-frac"><span class="t-astatus2 '+TEACHER_ASTATUS_BADGE[demo.status]+'">'+demo.status+'</span>'+
+      (showFrac?'<span class="t-areport-frac">'+frac+'/'+wenboFrac.total+'</span>':'')+'</span></div>';
+  }).join("");
+
+  const wenboShowFrac = wenboStatus!=="Not Started";
+  const wenboRow = '<div class="t-areport-row"><span class="t-areport-name live">Wenbo Lee</span>'+
+    '<span class="t-areport-status-frac"><span class="t-astatus2 '+TEACHER_ASTATUS_BADGE[wenboStatus]+'">'+wenboStatus+'</span>'+
+    (wenboShowFrac?'<span class="t-areport-frac">'+wenboFrac.done+'/'+wenboFrac.total+'</span>':'')+'</span></div>';
+
+  return '<div class="t-areport">'+
+    '<div class="t-areport-class">'+(classLabel?classLabel.label:"P6-A")+'</div>'+
+    '<div class="t-areport-lesson">'+SUBJECT_META[a.subjectKey].name+' · '+a.lessonTitle+'</div>'+
+    '<div class="t-areport-due">Due date: '+formatDueDate(a.dueDate)+'</div>'+
+    '<div class="t-areport-rows">'+wenboRow+rows+'</div>'+
+  '</div>';
+}
+function renderTeacherAssignedLearningSection(){
+  const assignments = getTeacherAssignments();
+  if(!assignments.length) return "";
+  return '<h3 class="t-section-title" style="margin-top:0;">Assigned Learning</h3>'+
+    '<div class="t-areport-wrap">'+assignments.map(renderTeacherAssignmentRoster).join("")+'</div>';
+}
+
 
 function viewSubject(){
   const card = (key)=>{ const meta=SUBJECT_META[key];
@@ -2634,10 +2733,10 @@ function viewTeacherDashboard(){
     '<div class="t-workspace-context"><span class="t-workspace-chip">'+dicon(TEACHER_PROFILE.subjectIcon,15)+' '+TEACHER_PROFILE.levelRange+' · '+TEACHER_PROFILE.subject+'</span> <button class="t-workspace-chip" style="border:none;cursor:pointer;color:var(--brand-deep);background:var(--brand-light);" onclick="goto(\'teacherAssign\',{assignConfirmed:false})">📋 Assign Learning</button></div>'+
     '<div class="class-tabs">'+tabs+'</div>'+
 
-    '<h3 class="t-section-title" style="margin-top:0;">This Term\'s Class Progress — '+d.classLabel+'</h3>'+
-    '<div class="t-progress-grid">'+progressCards+'</div>'+
+    ((classId==="overview"||classId==="p6a") ? renderTeacherAssignedLearningSection() : "")+
 
-    ((classId==="overview"||classId==="p6a") ? renderAssignedLearningSection(true) : "")+
+    '<h3 class="t-section-title">This Term\'s Class Progress — '+d.classLabel+'</h3>'+
+    '<div class="t-progress-grid">'+progressCards+'</div>'+
 
     '<div class="noticed-card-refined">'+
       '<div class="noticed-head"><span class="nh-badge">'+dicon('eye',24)+'</span><h3>Ethixo Noticed</h3></div>'+
