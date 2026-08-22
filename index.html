@@ -26,6 +26,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -159,12 +160,24 @@
   }
 
   .noticed-card-refined{background:linear-gradient(155deg,var(--brand-light),#fff 78%);border:1px solid var(--brand-light-b);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:30px 32px;margin-bottom:var(--ds-md);}
-  .t-assigned-wrap{display:flex;flex-direction:column;gap:12px;margin-bottom:var(--ds-md);}
-  .t-assigned-card{background:#fff;border:1px solid var(--border);border-left:5px solid var(--brand-deep);border-radius:14px;padding:18px 20px;box-shadow:var(--card-shadow);cursor:pointer;transition:transform .12s,box-shadow .12s;}
-  .t-assigned-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(24,36,32,.12);}
-  .t-assigned-label{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--brand-deep);margin-bottom:6px;}
-  .t-assigned-lesson{font-size:16px;font-weight:800;color:var(--ink);}
-  .t-assigned-due{font-size:13px;color:var(--muted);margin-top:4px;}
+  /* Assigned Learning card — one shared design used identically on the Student and
+     Teacher dashboards. Left-edge accent + status badge use the SAME subtle, muted
+     tint language as the rest of the dashboard (amber/green already established
+     elsewhere; the "new" state introduces one new muted terracotta tone, deliberately
+     soft rather than an alarming error-red — it means "new", not "something's wrong"). */
+  .t-acard-wrap{display:flex;flex-direction:column;gap:12px;margin-bottom:var(--ds-md);}
+  .t-acard{background:#fff;border:1px solid var(--border);border-left:5px solid var(--border);border-radius:14px;padding:18px 20px;box-shadow:var(--card-shadow);}
+  .t-acard-new{border-left-color:#C1665A;}
+  .t-acard-progress{border-left-color:var(--amber);}
+  .t-acard-done{border-left-color:var(--brand-deep);}
+  .t-acard-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
+  .t-acard-eyebrow{font-size:11.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+  .t-astatus2{flex:none;font-size:11.5px;font-weight:800;padding:4px 11px;border-radius:20px;white-space:nowrap;}
+  .t-astatus2-new{background:#F7E4E1;color:#9B4A3F;}
+  .t-astatus2-progress{background:var(--amber-bg);color:#8a5c14;}
+  .t-astatus2-done{background:var(--brand-light);color:var(--brand-deep);}
+  .t-acard-lesson{font-size:16px;font-weight:800;color:var(--ink);}
+  .t-acard-due{font-size:13px;color:var(--muted);margin-top:4px;}
   .noticed-head{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
   .noticed-head .nh-badge{width:48px;height:48px;border-radius:14px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 4px 12px rgba(0,168,107,.3);}
   .noticed-head h3{margin:0;font-size:19px;font-weight:800;color:var(--brand-deep);}
@@ -257,16 +270,6 @@
   .t-detail-row .t-detail-val{color:var(--ink);font-weight:700;text-align:right;}
   .assign-input{width:100%;border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;font-family:'Montserrat',sans-serif;font-size:14.5px;background:#fff;color:var(--ink);}
   .assign-input:disabled{background:var(--panel);color:var(--muted);}
-  .t-assign-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border:1px solid var(--border);border-radius:12px;margin-top:10px;}
-  .t-assign-row-title{font-weight:700;color:var(--ink);font-size:14.5px;}
-  .t-assign-row-meta{color:var(--muted);font-size:12.5px;margin-top:2px;}
-  .t-assign-roster{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px;}
-  .t-assign-student-row{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--ink);}
-  .t-assign-live{font-weight:700;color:var(--brand-deep);}
-  .t-astatus{flex:none;font-size:12px;font-weight:800;padding:5px 12px;border-radius:20px;white-space:nowrap;}
-  .t-astatus-notstarted{background:var(--panel);color:var(--muted);}
-  .t-astatus-progress{background:var(--amber-bg);color:#8a5c14;}
-  .t-astatus-done{background:var(--brand-light);color:var(--brand-deep);}
   .t-workspace-context{margin-bottom:16px;}
   .t-workspace-chip{display:inline-flex;align-items:center;gap:8px;background:var(--panel);color:var(--muted);font-weight:700;font-size:13px;padding:7px 14px;border-radius:20px;}
   .teacher-hero-card{position:relative;border-radius:22px;overflow:hidden;margin-bottom:20px;box-shadow:0 2px 8px rgba(24,36,32,.06),0 20px 40px -16px rgba(14,58,38,.22);background:#EAF3EC;height:400px;}
@@ -719,7 +722,7 @@ let state = { view:"entry", level:null, subjectKey:null, lessonId:null, currentQ
   answerDraft:"", feedback:null, loading:false, validating:false, error:null, toast:null, vault:[], selectedVaultIds:[],
   thinkingTurn:0, thinkingHistory:[], thinkingHistoryQid:null, questionDemand:null, usedClarification:false, awaitingFinalAnswer:false,
   thinkingDraft:"", improveDraft:"", teacherClassId:"overview", teacherStudentName:null, teacherProgressMetric:null,
-  assignFormSubject:null };
+  assignFormSubject:null, assignConfirmed:false };
 
 // Bumped on every navigation (goto/popstate) and captured at the start of every submission.
 // A submit function checks its own captured id against this after each await; if they no
@@ -1301,14 +1304,6 @@ function formatDueDate(iso){
   return parts[2]+"/"+parts[1]+"/"+parts[0];
 }
 
-// The full P6-A class for display purposes: the fictional roster plus Wenbo Lee, the one
-// real student. Order matches how the roster already reads elsewhere on the Teacher
-// Dashboard, with Wenbo appended (he's tracked separately from TEACHER_CLASS_DATA, same
-// pattern already used for the class's other real-data blending — see getTeacherDashboardData).
-function getFullClassRoster(classId){
-  return TEACHER_CLASS_DATA[classId].rosterNames.concat(["Wenbo Lee"]);
-}
-
 function assignLearning(){
   const level = ASSIGN_TARGET_LEVEL;
   const subjectKey = document.getElementById("assignSubject").value;
@@ -1327,7 +1322,7 @@ function assignLearning(){
     assignedAt: Date.now(),
   });
   sSet(TEACHER_ASSIGNMENTS_KEY, list);
-  toast("Learning assigned to P6-A ⭐");
+  state.assignConfirmed = true; // the Assign screen now stops here — see viewTeacherAssign()
   render();
 }
 
@@ -1354,6 +1349,34 @@ function getAssignmentStatus(a, studentName){
   });
   if(!anyAttempted) return "Not Started";
   return allFullMarks ? "Completed" : "In Progress";
+}
+
+// One shared card, used identically on the Student Dashboard and the Teacher Dashboard's
+// "Assigned Learning" section — same visual states, same status source, same click target
+// (the real existing lesson/practice flow). Status is always Wenbo's real status (the one
+// real student on this device); the muted red/orange/green left-accent is deliberately
+// subtle, matching the existing dashboard's soft-tint colour language rather than an
+// alarming/loud palette.
+const ASSIGNMENT_STATUS_META = {
+  "Not Started": { cardClass:"t-acard-new", badgeClass:"t-astatus2-new", btnLabel:"Start Practising", btnClass:"btn-primary" },
+  "In Progress": { cardClass:"t-acard-progress", badgeClass:"t-astatus2-progress", btnLabel:"Continue Practising", btnClass:"btn-primary" },
+  "Completed": { cardClass:"t-acard-done", badgeClass:"t-astatus2-done", btnLabel:"Review", btnClass:"btn-ghost" },
+};
+function renderAssignmentCard(a){
+  const status = getAssignmentStatus(a, "Wenbo Lee");
+  const meta = ASSIGNMENT_STATUS_META[status];
+  return '<div class="t-acard '+meta.cardClass+'">'+
+    '<div class="t-acard-top"><span class="t-acard-eyebrow">Assigned by Your Teacher</span><span class="t-astatus2 '+meta.badgeClass+'">'+status+'</span></div>'+
+    '<div class="t-acard-lesson">'+SUBJECT_META[a.subjectKey].name+' · '+a.lessonTitle+'</div>'+
+    '<div class="t-acard-due">Due date: '+formatDueDate(a.dueDate)+'</div>'+
+    '<button class="btn '+meta.btnClass+'" style="margin-top:12px;" onclick="goto(\'qbank\',{level:\''+a.level+'\',subjectKey:\''+a.subjectKey+'\',lessonId:\''+a.lessonId+'\'})">'+meta.btnLabel+'</button>'+
+  '</div>';
+}
+function renderAssignedLearningSection(showHeading){
+  const assignments = getTeacherAssignments();
+  if(!assignments.length) return "";
+  const heading = showHeading ? '<h3 class="t-section-title" style="margin-top:0;">Assigned Learning</h3>' : "";
+  return heading+'<div class="t-acard-wrap">'+assignments.map(renderAssignmentCard).join("")+'</div>';
 }
 
 function viewSubject(){
@@ -2402,17 +2425,9 @@ function viewDashboard(){
   // Teacher-assigned learning (MVP prototype) — reuses the exact existing lesson/practice
   // flow via a plain goto('qbank', ...); never a separate "assignment mode". Shown in both
   // the empty-state and normal dashboard, since an assignment can exist for a student who
-  // hasn't practised anything yet.
-  const assignments = getTeacherAssignments();
-  const assignedLearningHtml = assignments.length
-    ? '<div class="t-assigned-wrap">'+assignments.map(function(a){
-        return '<div class="t-assigned-card" onclick="goto(\'qbank\',{level:\''+a.level+'\',subjectKey:\''+a.subjectKey+'\',lessonId:\''+a.lessonId+'\'})">'+
-          '<div class="t-assigned-label">Assigned by Your Teacher</div>'+
-          '<div class="t-assigned-lesson">'+SUBJECT_META[a.subjectKey].name+' · '+a.lessonTitle+'</div>'+
-          '<div class="t-assigned-due">Due date: '+formatDueDate(a.dueDate)+'</div>'+
-        '</div>';
-      }).join("")+'</div>'
-    : "";
+  // hasn't practised anything yet. Same shared card component as the Teacher Dashboard's
+  // Assigned Learning section — see renderAssignedLearningSection().
+  const assignedLearningHtml = renderAssignedLearningSection(false);
 
   if(!d.hasActivity){
     return '<div class="dash-shell">'+
@@ -2616,11 +2631,13 @@ function viewTeacherDashboard(){
         '<div class="teacher-hero-copy"><h1>Good morning, Ms. Lim!</h1><p>'+heroSub+'</p></div>'+
       '</div>'+
     '</div>'+
-    '<div class="t-workspace-context"><span class="t-workspace-chip">'+dicon(TEACHER_PROFILE.subjectIcon,15)+' '+TEACHER_PROFILE.levelRange+' · '+TEACHER_PROFILE.subject+'</span> <button class="t-workspace-chip" style="border:none;cursor:pointer;color:var(--brand-deep);background:var(--brand-light);" onclick="goto(\'teacherAssign\')">📋 Assign Learning</button></div>'+
+    '<div class="t-workspace-context"><span class="t-workspace-chip">'+dicon(TEACHER_PROFILE.subjectIcon,15)+' '+TEACHER_PROFILE.levelRange+' · '+TEACHER_PROFILE.subject+'</span> <button class="t-workspace-chip" style="border:none;cursor:pointer;color:var(--brand-deep);background:var(--brand-light);" onclick="goto(\'teacherAssign\',{assignConfirmed:false})">📋 Assign Learning</button></div>'+
     '<div class="class-tabs">'+tabs+'</div>'+
 
     '<h3 class="t-section-title" style="margin-top:0;">This Term\'s Class Progress — '+d.classLabel+'</h3>'+
     '<div class="t-progress-grid">'+progressCards+'</div>'+
+
+    ((classId==="overview"||classId==="p6a") ? renderAssignedLearningSection(true) : "")+
 
     '<div class="noticed-card-refined">'+
       '<div class="noticed-head"><span class="nh-badge">'+dicon('eye',24)+'</span><h3>Ethixo Noticed</h3></div>'+
@@ -2684,6 +2701,19 @@ function viewTeacherProgressDetail(){
 function setAssignFormSubject(key){ state.assignFormSubject = key; render(); }
 
 function viewTeacherAssign(){
+  // Stop here after a successful assignment — no progress report on this screen anymore,
+  // just a clear confirmation and two simple next steps.
+  if(state.assignConfirmed){
+    return '<div class="card center">'+
+      '<h1 class="title">✅ Assignment assigned successfully.</h1>'+
+      '<p class="sub">P6-A will see this in their Assigned Learning.</p>'+
+      '<div class="row" style="justify-content:center;margin-top:20px;">'+
+        '<button class="btn btn-ghost" onclick="goto(\'teacherAssign\',{assignConfirmed:false})">Assign Another</button>'+
+        '<button class="btn btn-primary" onclick="goto(\'teacherDashboard\')">Go to Teacher Dashboard</button>'+
+      '</div>'+
+    '</div>';
+  }
+
   const level = ASSIGN_TARGET_LEVEL; // P6, matching the P6-A class this prototype demonstrates
   const subjectKey = state.assignFormSubject || "SCI";
   const lessons = getUnlockedLessonsForSubject(level, subjectKey);
@@ -2693,23 +2723,6 @@ function viewTeacherAssign(){
   const lessonOptions = lessons.map(function(l){
     return '<option value="'+l.id+'">'+l.title+'</option>';
   }).join("");
-
-  const roster = getFullClassRoster(ASSIGN_TARGET_CLASS_ID);
-  const assignments = getTeacherAssignments();
-  const listHtml = assignments.length
-    ? assignments.slice().reverse().map(function(a){
-        const rosterRows = roster.map(function(name){
-          const status = getAssignmentStatus(a, name);
-          const statusClass = status==="Completed" ? "t-astatus-done" : (status==="In Progress" ? "t-astatus-progress" : "t-astatus-notstarted");
-          return '<div class="t-assign-student-row"><span'+(name==="Wenbo Lee"?' class="t-assign-live"':'')+'>'+name+(name==="Wenbo Lee"?' (live)':'')+'</span><span class="t-astatus '+statusClass+'">'+status+'</span></div>';
-        }).join("");
-        return '<div class="t-assign-row">'+
-          '<div class="t-assign-row-title">'+SUBJECT_META[a.subjectKey].name+' · '+a.lessonTitle+'</div>'+
-          '<div class="t-assign-row-meta">P6-A · Due '+formatDueDate(a.dueDate)+'</div>'+
-          '<div class="t-assign-roster">'+rosterRows+'</div>'+
-        '</div>';
-      }).join("")
-    : '<p class="qmeta">No learning assigned yet.</p>';
 
   return '<div class="card">'+
     '<h1 class="title">📋 Assign Learning</h1>'+
@@ -2729,10 +2742,7 @@ function viewTeacherAssign(){
 
     '<button class="btn btn-primary" style="margin-top:16px;" onclick="assignLearning()">Assign Learning</button>'+
 
-    '<h3 class="t-section-title">Assigned So Far</h3>'+
-    listHtml+
-
-    '<button class="btn btn-ghost" style="margin-top:22px;" onclick="goto(\'teacherDashboard\')">Back to Dashboard</button>'+
+    '<button class="btn btn-ghost" style="margin-top:12px;" onclick="goto(\'teacherDashboard\')">Back to Dashboard</button>'+
   '</div>';
 }
 
