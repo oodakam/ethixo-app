@@ -1,0 +1,2 @@
+# Keep test files in the repository but out of the Vercel deployment (not uploaded, not served).
+/tests
