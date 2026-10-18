@@ -756,9 +756,127 @@ let state = { view:"entry", level:null, subjectKey:null, lessonId:null, currentQ
 // is stale — it's dropped instead of overwriting whatever screen is now showing.
 let requestSeq = 0;
 
+/* ETHIXO-SYNC-BEGIN
+   Database-sync SCAFFOLD (Integration Plan v1.1, Phase 0 + 1). INERT by design:
+   - DB_SYNC_MODE is "off" on every deployment. While "off", nothing below reads storage, loads
+     a library, creates a client, queues an outbox or touches the network.
+   - There is no Supabase URL/key and no loader here yet; sign-in and real syncing are Phase 2+.
+   - Local-first: localStorage stays the source of truth. This block only OBSERVES writes.
+   - Vault planning is UPSERT-ONLY: nothing in this block can express a remote delete. */
+const DB_SYNC_MODE = "off"; // "off" (safe default) | "shadow" | "on" — leave "off" until explicitly approved
+function createEthixoSync(opts){
+  opts = opts || {};
+  const baseMode = opts.mode === "shadow" || opts.mode === "on" ? opts.mode : "off";
+  const getStorage = opts.getStorage || function(){ return localStorage; };
+  const now = opts.now || function(){ return Date.now(); };
+  const OUTBOX_KEY = "ethixoOutbox", KILL_KEY = "ethixoSyncKill";
+  const STATE_KEYS = ["timelog","lastLesson","lastActive","chosenLevel","dashboardSeenNoticedIds"];
+  const MAX_OUTBOX = 500, MAX_TRIES = 6, BACKOFF_MS = [5000, 30000, 300000];
+  let sender = null;
+
+  // Effective mode. The kill switch is only consulted when the build flag is not "off", so the
+  // default (off) path performs no storage access at all.
+  function mode(){
+    if(baseMode === "off") return "off";
+    try{ if(getStorage().getItem(KILL_KEY) === "1") return "off"; }catch(e){ /* unreadable storage: stay as built */ }
+    return baseMode;
+  }
+
+  // Pure: where would a local key go? No I/O.
+  function route(key){
+    if(typeof key !== "string") return { kind:"local", reason:"not-a-string" };
+    if(key === "vault") return { kind:"vault" };
+    if(STATE_KEYS.indexOf(key) !== -1) return { kind:"state", field:key };
+    if(key === "activePersona") return { kind:"local", reason:"ui-only" };
+    if(key === "teacherAssignments") return { kind:"local", reason:"teacher-phase-deferred" };
+    if(key.indexOf("attempts:") === 0){
+      const p = key.split(":");
+      if(p.length !== 5) return { kind:"local", reason:"unexpected-attempt-key" };
+      const level = p[1], subjectKey = p[2], lessonId = p[3], idx = p[4];
+      if(!/^\d{1,3}$/.test(idx)) return { kind:"local", reason:"custom-question" };
+      if(!level || level.length > 10 || !subjectKey || subjectKey.length > 40 || !lessonId || lessonId.length > 40)
+        return { kind:"local", reason:"out-of-schema-limits" };
+      return { kind:"attempts", level:level, subject_key:subjectKey, lesson_id:lessonId, q_idx:parseInt(idx,10) };
+    }
+    return { kind:"local", reason:"unmapped" };
+  }
+
+  // Pure: which Vault entries should be UPSERTED? Returns { upserts, warnings } and nothing else:
+  // there is deliberately no "deletes" output. Absent/short/empty/unloaded input can never remove anything.
+  // input: { local:Array, loaded:boolean, lastMirroredCount?:number, remoteSavedAt?:{[qid]:number} }
+  function planVaultUpserts(input){
+    const out = { upserts: [], warnings: [] };
+    input = input || {};
+    if(input.loaded !== true){ out.warnings.push("vault-not-loaded"); return out; }
+    if(!Array.isArray(input.local)){ out.warnings.push("local-not-an-array"); return out; }
+    if(typeof input.lastMirroredCount === "number" && input.local.length < input.lastMirroredCount) out.warnings.push("local-shrunk");
+    const remote = input.remoteSavedAt || {};
+    input.local.forEach(function(v){
+      if(!v || typeof v !== "object" || Array.isArray(v) || typeof v.qid !== "string" || !v.qid || v.qid.length > 200){ out.warnings.push("skipped-invalid-entry"); return; }
+      if(typeof remote[v.qid] === "number" && typeof v.savedAt === "number" && remote[v.qid] > v.savedAt){ out.warnings.push("skipped-remote-newer:"+v.qid); return; }
+      let size; try{ size = JSON.stringify(v).length; }catch(e){ out.warnings.push("skipped-unserialisable:"+v.qid); return; }
+      if(size > 100000){ out.warnings.push("skipped-too-large:"+v.qid); return; }
+      const p = v.qid.split(":"); // "attempts:{level}:{subject}:{lesson}:{id}"
+      const lessonId = p.length === 5 && p[3] && p[3].length <= 40 ? p[3] : null;
+      const subjectKey = typeof v.subjectKey === "string" && v.subjectKey.length <= 40 ? v.subjectKey : null;
+      out.upserts.push({ qid:v.qid, subject_key:subjectKey, lesson_id:lessonId, data:v });
+    });
+    return out;
+  }
+
+  // ---- outbox: exists only when mode is not "off" AND a sender has been registered ----
+  function readBox(){
+    try{ const raw = getStorage().getItem(OUTBOX_KEY); const a = raw ? JSON.parse(raw) : []; return Array.isArray(a) ? a : []; }catch(e){ return []; }
+  }
+  function writeBox(list){ try{ getStorage().setItem(OUTBOX_KEY, JSON.stringify(list)); }catch(e){ /* best effort; local learning data is unaffected */ } }
+
+  // Called by sSet after the local write has succeeded. Must never throw into the app.
+  function onWrite(key, val){
+    if(baseMode === "off") return;            // default path: immediate return, zero side effects
+    if(mode() === "off" || !sender) return;   // kill switch, or nothing able to send yet (Phase 1)
+    const r = route(key);
+    if(r.kind === "local") return;
+    const list = readBox().filter(function(it){ return it.key !== key; }); // newest value per key wins
+    list.push({ key:key, route:r, value:val, queuedAt:now(), tries:0, nextAt:0, parked:false });
+    writeBox(list.length > MAX_OUTBOX ? list.slice(list.length - MAX_OUTBOX) : list);
+  }
+
+  // Manual flush (no timers in Phase 1). sender(item) must return a promise; rejection => retry later.
+  async function flush(){
+    const summary = { sent:0, failed:0, parked:0, skipped:0 };
+    if(mode() === "off" || !sender) return summary;
+    const t = now();
+    const list = readBox();
+    const keep = [];
+    for(let i = 0; i < list.length; i++){
+      const it = list[i];
+      if(it.parked){ keep.push(it); summary.parked++; continue; }
+      if(it.nextAt > t){ keep.push(it); summary.skipped++; continue; }
+      try{ await sender(it); summary.sent++; }
+      catch(e){
+        it.tries = (it.tries || 0) + 1; summary.failed++;
+        if(it.tries >= MAX_TRIES){ it.parked = true; summary.parked++; }
+        else it.nextAt = t + BACKOFF_MS[Math.min(it.tries - 1, BACKOFF_MS.length - 1)];
+        keep.push(it);
+      }
+    }
+    writeBox(keep);
+    return summary;
+  }
+
+  return {
+    mode: mode, route: route, planVaultUpserts: planVaultUpserts, onWrite: onWrite, flush: flush,
+    setSender: function(fn){ if(baseMode !== "off") sender = typeof fn === "function" ? fn : null; },
+    outbox: function(){ return baseMode === "off" ? [] : readBox(); },
+    constants: { OUTBOX_KEY:OUTBOX_KEY, KILL_KEY:KILL_KEY, MAX_OUTBOX:MAX_OUTBOX, MAX_TRIES:MAX_TRIES },
+  };
+}
+const ETHIXO_SYNC = createEthixoSync({ mode: DB_SYNC_MODE });
+/* ETHIXO-SYNC-END */
+
 /* ---------- Storage helpers (browser localStorage — per-device, no account system yet) ---------- */
 function sGet(key){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
-function sSet(key,val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){ console.error("storage set failed",e); } }
+function sSet(key,val){ try{ localStorage.setItem(key, JSON.stringify(val)); try{ ETHIXO_SYNC.onWrite(key,val); }catch(_e){ /* sync can never affect the app */ } }catch(e){ console.error("storage set failed",e); } }
 function qKey(q){ return "attempts:"+q.level+":"+q.subjectKey+":"+q.lessonId+":"+q.id; }
 function attemptScore(a){ return typeof a.score === "number" ? a.score : Math.round(((a.scoreLow||0)+(a.scoreHigh||0))/2); }
 
