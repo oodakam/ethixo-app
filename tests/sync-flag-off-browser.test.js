@@ -5,6 +5,8 @@
 //  2. Differential check: runs the SAME scripted session against the original index.html (git HEAD) and the
 //     new one, then asserts identical rendered screens and identical localStorage contents.
 //  3. Positive controls prove the detectors would catch a violation.
+//  4. (Phase 2) Also asserts the AUTH block is inert: no ethixoAuth*/ethixoAuthMeta access, no vendored-library request, no
+//     navigator.locks use, and the SAME addEventListener / setTimeout / setInterval call sequence as the original app.
 // Needs: playwright-core + a Chromium (PLAYWRIGHT_BROWSERS_PATH / CHROMIUM_PATH). Run: node tests/sync-flag-off-browser.test.js
 const fs = require("fs"), os = require("os"), path = require("path"), http = require("http");
 const { execFileSync } = require("child_process");
@@ -18,7 +20,13 @@ function assert(c, m){ if(c){ passed++; console.log("  PASS:", m); } else { fail
 // Same inline-script injection used for both app versions: log storage + network-ish APIs, seed data.
 const INSTRUMENT = (seed) => `
 (function(){
-  window.__log = { storage:[], api:[] };
+  window.__log = { storage:[], api:[], listeners:[], timers:[], locks:[] };
+  (function(){
+    const al = EventTarget.prototype.addEventListener; EventTarget.prototype.addEventListener = function(t){ try{ window.__log.listeners.push(String(t)); }catch(e){} return al.apply(this, arguments); };
+    const st = window.setTimeout; window.setTimeout = function(f, ms){ try{ window.__log.timers.push(["timeout", Number(ms) || 0]); }catch(e){} return st.apply(window, arguments); };
+    const si = window.setInterval; window.setInterval = function(f, ms){ try{ window.__log.timers.push(["interval", Number(ms) || 0]); }catch(e){} return si.apply(window, arguments); };
+    try{ if(navigator.locks){ const lr = navigator.locks.request.bind(navigator.locks); navigator.locks.request = function(){ try{ window.__log.locks.push(String(arguments[0])); }catch(e){} return lr.apply(null, arguments); }; } }catch(e){}
+  })();
   const P = Storage.prototype;
   ["getItem","setItem","removeItem","clear","key"].forEach(function(n){
     const o = P[n]; P[n] = function(){ try{ window.__log.storage.push([n, String(arguments[0])]); }catch(e){} return o.apply(this, arguments); };
@@ -92,6 +100,16 @@ async function session(browser, port, seed){
   return { shots, dump, log, requests, errors };
 }
 
+async function sessionAuthStatus(port, seed){
+  const ctx = await browser_ref.newContext(); await ctx.addInitScript(INSTRUMENT(seed));
+  await ctx.route("**/*", r => r.request().url().startsWith("http://127.0.0.1:" + port) ? r.continue() : r.abort());
+  const page = await ctx.newPage(); await page.goto("http://127.0.0.1:" + port + "/index.html"); await page.waitForTimeout(300);
+  const st = await page.evaluate(() => { try{ ETHIXO_AUTH.studentActive("P6"); return ETHIXO_AUTH.status(); }catch(e){ return "ERR " + e; } });
+  const log = await page.evaluate(() => window.__log);
+  await ctx.close();
+  return st + (log.storage.some(x => /ethixoAuth|sb-/.test(x[1])) ? " (storage touched)" : "");
+}
+let browser_ref = null;
 function normalise(dump){ // keys the app itself stamps with the clock
   const d = Object.assign({}, dump); delete d.lastActive; delete d.__seeded;
   if(d.timelog) d.timelog = "<timelog>";
@@ -108,6 +126,7 @@ function normalise(dump){ // keys the app itself stamps with the clock
   fs.writeFileSync(path.join(newDir, "index.html"), fs.readFileSync(path.join(repo, "index.html")));
   const A = await serve(oldDir), B = await serve(newDir);
   const browser = await chromium.launch({ executablePath: exe, args: ["--no-sandbox"] });
+  browser_ref = browser;
 
   for(const name of Object.keys(SEEDS)){
     console.log("\nScenario: " + name + " (flag OFF) — original vs new");
@@ -122,8 +141,14 @@ function normalise(dump){ // keys the app itself stamps with the clock
     assert(JSON.stringify(hosts) === JSON.stringify(oldHosts), "NEW app contacts exactly the same hosts as the ORIGINAL app");
     assert(JSON.stringify(n.requests) === JSON.stringify(o.requests.map(u => u.replace(":" + A.port, ":" + B.port))), "NEW app makes exactly the same request sequence as the ORIGINAL (" + n.requests.length + " requests)");
 
-    const touched = n.log.storage.map(x => x[1]).filter(k => /^(ethixoOutbox|ethixoSyncKill|ethixoPreSyncSnapshot)$|^sb-|supabase/i.test(k));
+    const touched = n.log.storage.map(x => x[1]).filter(k => /^(ethixoOutbox|ethixoSyncKill|ethixoPreSyncSnapshot)$|^sb-|supabase|^ethixoAuth/i.test(k));
     assert(touched.length === 0, "NEW app never reads/writes ethixoOutbox, ethixoSyncKill or Supabase auth keys (storage ops logged: " + n.log.storage.length + ")");
+    assert(!n.requests.some(u => /\/assets\/vendor\//.test(u)) && !n.log.api.some(a => /assets\/vendor|supabase-js/.test(a[1])), "NEW app never requests the vendored library (/assets/vendor/*), by network or script injection");
+    assert(!n.log.storage.some(x => /^ethixoAuth|ethixoAuthMeta|^sb-/.test(x[1])) && !("ethixoAuth" in n.dump) && !("ethixoAuthMeta" in n.dump), "NEW app never touches ethixoAuth / ethixoAuthMeta / sb-* and leaves none behind");
+    assert(n.log.locks.length === 0, "NEW app never calls navigator.locks.request (auth cross-tab lock)");
+    assert(JSON.stringify(n.log.listeners) === JSON.stringify(o.log.listeners), "NEW app registers exactly the same event listeners as the ORIGINAL (" + n.log.listeners.length + ")");
+    assert(JSON.stringify(n.log.timers) === JSON.stringify(o.log.timers), "NEW app creates exactly the same timers as the ORIGINAL (" + n.log.timers.length + ")");
+    assert(await sessionAuthStatus(B.port, SEEDS[name]) === "off", "ETHIXO_AUTH.status() is \"off\" and ETHIXO_AUTH exists but inert");
     const oStorageKeys = JSON.stringify(o.log.storage.map(x => x[0] + ":" + x[1]).filter(s => !/lastActive|timelog|__seeded/.test(s)));
     const nStorageKeys = JSON.stringify(n.log.storage.map(x => x[0] + ":" + x[1]).filter(s => !/lastActive|timelog|__seeded/.test(s)));
     assert(oStorageKeys === nStorageKeys, "NEW app performs the same storage operations (same op + key, same order) as the ORIGINAL");
@@ -152,6 +177,13 @@ function normalise(dump){ // keys the app itself stamps with the clock
     assert(seen.some(u => /supabase\.co/.test(u)), "request recorder DOES see a deliberate supabase.co request");
     assert(log.api.some(a => /supabase\.co/.test(a[1])), "fetch hook DOES see a deliberate supabase.co call");
     assert(log.storage.some(x => x[1] === "ethixoOutbox"), "storage hook DOES see a deliberate ethixoOutbox read");
+    await page.evaluate(() => { localStorage.getItem("ethixoAuthMeta"); navigator.locks && navigator.locks.request("ethixo-auth-init", () => {}); window.addEventListener("online", () => {}); setTimeout(() => {}, 5); fetch("/assets/vendor/supabase-js-2.117.2.umd.js").catch(()=>{}); });
+    await page.waitForTimeout(300);
+    const log2 = await page.evaluate(() => window.__log);
+    assert(log2.storage.some(x => x[1] === "ethixoAuthMeta"), "storage hook DOES see a deliberate ethixoAuthMeta read");
+    assert(log2.locks.indexOf("ethixo-auth-init") !== -1, "lock hook DOES see a deliberate navigator.locks.request");
+    assert(log2.listeners.indexOf("online") !== -1 && log2.timers.some(t => t[0] === "timeout" && t[1] === 5), "listener + timer hooks DO see deliberate additions");
+    assert(seen.some(u => /assets\/vendor\//.test(u)), "request recorder DOES see a deliberate /assets/vendor/ request");
     await ctx.close();
   }
   {

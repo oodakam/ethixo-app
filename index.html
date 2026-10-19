@@ -756,6 +756,17 @@ let state = { view:"entry", level:null, subjectKey:null, lessonId:null, currentQ
 // is stale — it's dropped instead of overwriting whatever screen is now showing.
 let requestSeq = 0;
 
+/* ETHIXO-CONFIG-BEGIN
+   Phase 2 configuration. PLACEHOLDERS ONLY in committed code: no real Supabase endpoint or key is
+   stored here. The publishable key is public by design, but it is still supplied separately and only
+   for an approved Preview test. DB_SYNC_ALLOWED_HOSTS limits where sync/auth may ever run: when it is
+   non-empty, any other hostname (e.g. ethixo.ai, test.ethixo.ai) stays "off" even if the flag is on. */
+const SUPABASE_URL = "__SET_ME__";
+const SUPABASE_PUBLISHABLE_KEY = "__SET_ME__";
+const SUPABASE_LIB_PATH = "assets/vendor/supabase-js-2.117.2.umd.js"; // vendored, loaded only when auth is active
+const DB_SYNC_ALLOWED_HOSTS = [];
+/* ETHIXO-CONFIG-END */
+
 /* ETHIXO-SYNC-BEGIN
    Database-sync SCAFFOLD (Integration Plan v1.1, Phase 0 + 1). INERT by design:
    - DB_SYNC_MODE is "off" on every deployment. While "off", nothing below reads storage, loads
@@ -769,6 +780,8 @@ function createEthixoSync(opts){
   const baseMode = opts.mode === "shadow" || opts.mode === "on" ? opts.mode : "off";
   const getStorage = opts.getStorage || function(){ return localStorage; };
   const now = opts.now || function(){ return Date.now(); };
+  const allowedHosts = Array.isArray(opts.allowedHosts) ? opts.allowedHosts : [];
+  const getHost = opts.getHost || function(){ return location.hostname; };
   const OUTBOX_KEY = "ethixoOutbox", KILL_KEY = "ethixoSyncKill";
   const STATE_KEYS = ["timelog","lastLesson","lastActive","chosenLevel","dashboardSeenNoticedIds"];
   const MAX_OUTBOX = 500, MAX_TRIES = 6, BACKOFF_MS = [5000, 30000, 300000];
@@ -778,6 +791,7 @@ function createEthixoSync(opts){
   // default (off) path performs no storage access at all.
   function mode(){
     if(baseMode === "off") return "off";
+    if(allowedHosts.length){ try{ if(allowedHosts.indexOf(getHost()) === -1) return "off"; }catch(e){ return "off"; } }
     try{ if(getStorage().getItem(KILL_KEY) === "1") return "off"; }catch(e){ /* unreadable storage: stay as built */ }
     return baseMode;
   }
@@ -871,8 +885,254 @@ function createEthixoSync(opts){
     constants: { OUTBOX_KEY:OUTBOX_KEY, KILL_KEY:KILL_KEY, MAX_OUTBOX:MAX_OUTBOX, MAX_TRIES:MAX_TRIES },
   };
 }
-const ETHIXO_SYNC = createEthixoSync({ mode: DB_SYNC_MODE });
+const ETHIXO_SYNC = createEthixoSync({ mode: DB_SYNC_MODE, allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" ? DB_SYNC_ALLOWED_HOSTS : []) });
 /* ETHIXO-SYNC-END */
+
+/* ETHIXO-AUTH-BEGIN
+   Phase 2: student ANONYMOUS sign-in + one profile row (Phase 2 plan, decisions P2-1..P2-13).
+   INERT by design:
+   - While DB_SYNC_MODE is "off" (or the host is not allow-listed, or the kill switch is set) every public
+     method returns immediately. Nothing below reads storage, touches window/navigator/location, creates a
+     timer or listener, loads the library, creates a client or makes a request.
+   - Nothing runs at definition time. Timers and listeners are created only after the first ACTIVE call.
+   - Sends only: anonymous sign-up, a profiles SELECT, create_my_profile(student, "Student", level) and an
+     optional profiles.level UPDATE. It never touches attempts / vault / student_state and never registers a
+     sync sender, so no learning data can leave the browser in Phase 2.
+   - The student never sees anything: no UI, no toast, no error. All failures are silent and self-healing. */
+function createEthixoAuth(opts){
+  opts = opts || {};
+  const baseMode = opts.mode === "shadow" || opts.mode === "on" ? opts.mode : "off";
+  const sync = opts.sync || null;
+  const cfg = opts.config || {};
+  const getStorage = opts.getStorage || function(){ return localStorage; };
+  const now = opts.now || function(){ return Date.now(); };
+  const setTimer = opts.setTimer || function(f, ms){ return setTimeout(f, ms); };
+  const clearTimer = opts.clearTimer || function(id){ clearTimeout(id); };
+  const getLocks = opts.getLocks || function(){ return (typeof navigator !== "undefined" && navigator.locks) || null; };
+  const addListener = opts.addListener || function(type, fn){ if(type === "online") window.addEventListener("online", fn); else document.addEventListener(type, fn); };
+  const isVisible = opts.isVisible || function(){ return document.visibilityState !== "hidden"; };
+  const loadLibrary = opts.loadLibrary || defaultLoadLibrary;
+  const warnFn = opts.warn || function(m){ try{ console.warn(m); }catch(e){} };
+  const META_KEY = "ethixoAuthMeta", SESSION_KEY = "ethixoAuth", LOCK_NAME = "ethixo-auth-init";
+  const DISPLAY_NAME = "Student";
+  const LEVELS_OK = { P5:1, P6:1 };
+  const BACKOFF_MS = [5000, 30000, 300000], MAX_TRIES = 6, EVENT_COOLDOWN_MS = 30000;
+
+  let status = "off";            // off | idle | signing-in | signed-in | profile-ok | degraded | disabled
+  let client = null, clientPromise = null;
+  let inflight = null, retryTimer = null, tries = 0, lastKick = 0, listenersOn = false;
+  let pendingLevel = null, reauthed = false, identityChanged = false, warned = false;
+
+  // The ONLY activation gate. baseMode is a build-time constant, so "off" returns before any other work.
+  function isActive(){
+    if(baseMode === "off") return false;
+    try{ return !!sync && sync.mode() !== "off"; }catch(e){ return false; }
+  }
+
+  function defaultLoadLibrary(){
+    return new Promise(function(resolve, reject){
+      if(window.supabase && typeof window.supabase.createClient === "function") return resolve(window.supabase);
+      const s = document.createElement("script");
+      s.async = true; s.src = cfg.libPath;
+      s.onload = function(){
+        if(window.supabase && typeof window.supabase.createClient === "function") resolve(window.supabase);
+        else { try{ s.remove(); }catch(e){} reject(new Error("library missing")); }
+      };
+      s.onerror = function(){ try{ s.remove(); }catch(e){} reject(new Error("library load failed")); };
+      document.head.appendChild(s);
+    });
+  }
+
+  // ---- configuration + key guard (pure) ----
+  function decodeJwtRole(tok){
+    try{
+      const parts = String(tok).split(".");
+      if(parts.length !== 3) return null;
+      let b = parts[1].replace(/-/g, "+").replace(/_/g, "/"); while(b.length % 4) b += "=";
+      return JSON.parse(atob(b)).role || null;
+    }catch(e){ return null; }
+  }
+  function keyProblem(key){
+    if(typeof key !== "string" || !key || key.indexOf("__SET_ME__") !== -1) return "placeholder";
+    if(key.indexOf("sb_secret_") === 0) return "secret-key";
+    if(key.indexOf("sb_publishable_") === 0) return null;
+    const role = decodeJwtRole(key);
+    if(role === "service_role") return "service-role-key";
+    if(role === "anon") return null;
+    return "unrecognised-key";
+  }
+  function urlProblem(url){
+    if(typeof url !== "string" || !url || url.indexOf("__SET_ME__") !== -1) return "placeholder";
+    return /^https:\/\/[A-Za-z0-9.-]+\/?$/.test(url) ? null : "bad-url";
+  }
+  function configProblem(){ return urlProblem(cfg.url) || keyProblem(cfg.key); }
+
+  // ---- error classification (pure) ----
+  function classify(e){
+    const st = e && (e.status != null ? e.status : e.statusCode);
+    const code = e && e.code != null ? String(e.code) : "";
+    const msg = e && e.message ? String(e.message) : "";
+    if(code === "28000" || code === "PGRST301" || code === "PGRST303" || code === "session_not_found" ||
+       code === "refresh_token_not_found" || code === "refresh_token_already_used" || code === "user_not_found" ||
+       (st === 401 && /jwt|expired/i.test(msg))) return "session-lost";
+    if(st === 429 || code === "over_request_rate_limit") return "rate";
+    if(typeof st === "number" && st >= 500 && st < 600) return "retry";
+    if(code === "anonymous_provider_disabled" || code === "captcha_failed" || code === "signup_disabled" ||
+       code === "validation_failed" || code === "bad_json" || code === "22023" || code === "42501" || code === "23514" ||
+       st === 400 || st === 401 || st === 403 || st === 404 || st === 422) return "config";
+    return "retry"; // network failure (TypeError / AuthRetryableFetchError) or unknown
+  }
+  function retryAfterMs(e){
+    try{
+      const v = e && (e.retryAfter != null ? e.retryAfter : (e.headers && typeof e.headers.get === "function" ? e.headers.get("retry-after") : null));
+      const n = Number(v); return isFinite(n) && n > 0 ? n * 1000 : 0;
+    }catch(x){ return 0; }
+  }
+  function warnOnce(tag){ if(warned) return; warned = true; warnFn("Ethixo auth: " + tag); } // code/tag only, never ids or tokens
+
+  // ---- client (created once, only when active) ----
+  function getClient(){
+    if(client) return Promise.resolve(client);
+    if(!clientPromise){
+      clientPromise = loadLibrary().then(function(lib){
+        client = lib.createClient(cfg.url, cfg.key, { auth: {
+          persistSession:true, autoRefreshToken:true, detectSessionInUrl:false, flowType:"pkce", storageKey:SESSION_KEY } });
+        return client;
+      });
+      clientPromise.catch(function(){ clientPromise = null; }); // allow a later retry (e.g. library fetch failed offline)
+    }
+    return clientPromise;
+  }
+  function withLock(fn){
+    let l = null; try{ l = getLocks(); }catch(e){ l = null; }
+    if(l && typeof l.request === "function") return l.request(LOCK_NAME, fn);
+    return fn();
+  }
+
+  // ---- identity marker (P2-7): only ever written when active ----
+  function recordIdentity(uid){
+    try{
+      const st = getStorage(); let prev = null;
+      try{ prev = JSON.parse(st.getItem(META_KEY)); }catch(e){ prev = null; }
+      if(prev && prev.uid && prev.uid !== uid) identityChanged = true;
+      if(!prev || prev.uid !== uid) st.setItem(META_KEY, JSON.stringify({ uid: uid, at: now() }));
+    }catch(e){ /* storage unavailable: marker is best-effort */ }
+  }
+
+  // ---- profile: exactly one row per identity, idempotent ----
+  async function selectProfile(c, uid){
+    const r = await c.from("profiles").select("id,role,level").eq("id", uid).maybeSingle();
+    if(r.error) throw r.error;
+    return r.data || null;
+  }
+  async function ensureProfile(c, uid, level){
+    let row = await selectProfile(c, uid);
+    if(!row){
+      const r = await c.rpc("create_my_profile", { p_role:"student", p_display_name:DISPLAY_NAME, p_level:level });
+      if(r.error){
+        if(String(r.error.code) !== "23505") throw r.error;   // 23505 = already exists (second tab / lost response) = success
+        row = await selectProfile(c, uid);
+      } else {
+        row = { id:uid, role:"student", level:level };
+      }
+    }
+    if(row && row.role && row.role !== "student"){ status = "disabled"; warnOnce("profile-not-student"); return false; }
+    if(row && row.level !== level){
+      const u = await c.from("profiles").update({ level: level }).eq("id", uid);
+      if(u.error) throw u.error;
+    }
+    return true;
+  }
+
+  // ---- one attempt: session -> profile ----
+  async function attempt(){
+    const level = pendingLevel;
+    if(!isActive()) return;
+    const problem = configProblem();
+    if(problem){ status = "disabled"; warnOnce("config:" + problem); return; }
+    status = "signing-in";
+    try{
+      const c = await getClient();
+      await withLock(async function(){
+        const gs = await c.auth.getSession();
+        if(gs.error) throw gs.error;
+        let session = gs.data && gs.data.session;
+        if(!session){
+          const si = await c.auth.signInAnonymously();
+          if(si.error) throw si.error;
+          session = si.data && si.data.session;
+          if(!session || !session.user) throw new Error("no session returned");
+        }
+        status = "signed-in";
+        const ok = await ensureProfile(c, session.user.id, level);
+        if(ok){ status = "profile-ok"; tries = 0; reauthed = false; recordIdentity(session.user.id); }
+      });
+    }catch(e){
+      return failed(e);
+    }
+  }
+
+  async function failed(e){
+    const kind = classify(e);
+    if(kind === "session-lost" && !reauthed){
+      reauthed = true;                       // one fresh identity per episode, never a loop
+      try{ if(client) await client.auth.signOut({ scope:"local" }); }catch(x){ /* ignore */ }
+      return attempt();
+    }
+    if(kind === "config"){ status = "disabled"; warnOnce("config:" + String((e && (e.code || e.status)) || "error")); return; }
+    status = "degraded";
+    tries++;
+    if(tries > MAX_TRIES){ warnOnce("gave-up"); return; }   // parked until the next app start or an online/visible event
+    let d = BACKOFF_MS[Math.min(tries - 1, BACKOFF_MS.length - 1)];
+    const ra = retryAfterMs(e); if(ra) d = Math.max(d, Math.min(ra, 3600000));
+    attachListeners();
+    if(retryTimer){ clearTimer(retryTimer); retryTimer = null; }
+    retryTimer = setTimer(function(){ retryTimer = null; if(isActive()) start(); }, d);
+  }
+
+  function start(){
+    if(inflight) return inflight;
+    lastKick = now();
+    const done = function(){ inflight = null; };
+    inflight = Promise.resolve().then(attempt).then(done, done);
+    return inflight;
+  }
+
+  function attachListeners(){
+    if(listenersOn) return;
+    listenersOn = true;
+    function onEvent(){
+      if(!isActive() || status !== "degraded" || inflight) return;
+      if(now() - lastKick < EVENT_COOLDOWN_MS) return;
+      if(retryTimer){ clearTimer(retryTimer); retryTimer = null; }
+      start();
+    }
+    try{ addListener("online", onEvent); addListener("visibilitychange", function(){ if(isVisible()) onEvent(); }); }catch(e){ /* optional */ }
+  }
+
+  // Public: called when a student is actually using the app as a student (see the three call sites).
+  function studentActive(level){
+    if(baseMode === "off") return;                // build flag off: nothing else is evaluated
+    if(!isActive()) return;
+    if(!Object.prototype.hasOwnProperty.call(LEVELS_OK, level)) return;
+    pendingLevel = level;
+    if(status === "disabled") return;
+    return start();
+  }
+
+  return {
+    studentActive: studentActive,
+    status: function(){ return baseMode === "off" ? "off" : status; },
+    identityChanged: function(){ return identityChanged; },
+    classify: classify, keyProblem: keyProblem, urlProblem: urlProblem,
+    constants: { META_KEY:META_KEY, SESSION_KEY:SESSION_KEY, DISPLAY_NAME:DISPLAY_NAME, BACKOFF_MS:BACKOFF_MS, MAX_TRIES:MAX_TRIES },
+  };
+}
+const ETHIXO_AUTH = createEthixoAuth({
+  mode: DB_SYNC_MODE, sync: ETHIXO_SYNC,
+  config: { url: SUPABASE_URL, key: SUPABASE_PUBLISHABLE_KEY, libPath: SUPABASE_LIB_PATH },
+});
+/* ETHIXO-AUTH-END */
 
 /* ---------- Storage helpers (browser localStorage — per-device, no account system yet) ---------- */
 function sGet(key){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
@@ -1355,7 +1615,7 @@ function switchToTeacher(){ sSet("activePersona","teacher"); goto("teacherDashbo
 function switchToStudent(){
   sSet("activePersona","student");
   const lvl = sGet("chosenLevel");
-  if(lvl){ state.level = lvl; goto("dashboard"); } else { goto("level"); }
+  if(lvl){ state.level = lvl; try{ ETHIXO_AUTH.studentActive(lvl); }catch(_e){ /* auth can never affect the app */ } goto("dashboard"); } else { goto("level"); }
 }
 
 const P5_ENABLED = false; // toggle back to true when opening the P5 option for real students
@@ -1380,6 +1640,7 @@ function viewLevel(){
 function chooseLevel(){
   sSet("activePersona","student");
   markOnboarded(state.level);
+  try{ ETHIXO_AUTH.studentActive(state.level); }catch(_e){ /* auth can never affect the app */ }
   goto("subject");
 }
 
@@ -3048,6 +3309,7 @@ window.TEACHER_PROFILE = TEACHER_PROFILE; window.TEACHER_CLASSES = TEACHER_CLASS
     } else if(activePersona === "student" && savedLevel){
       state.level = savedLevel;
       state.view = "dashboard";
+      try{ ETHIXO_AUTH.studentActive(savedLevel); }catch(_e){ /* auth can never affect the app */ }
     }
 
     try{ history.replaceState(stateSnapshot(), "", "#"+state.view); }catch(e){ /* history API unavailable in this context — continue without it */ }
