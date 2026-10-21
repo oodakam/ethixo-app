@@ -780,7 +780,11 @@ function createEthixoSync(opts){
   const baseMode = opts.mode === "shadow" || opts.mode === "on" ? opts.mode : "off";
   const getStorage = opts.getStorage || function(){ return localStorage; };
   const now = opts.now || function(){ return Date.now(); };
-  const allowedHosts = Array.isArray(opts.allowedHosts) ? opts.allowedHosts : [];
+  // Host allow-list. Entries must be plain hostnames. requireAllowList=true (what the app uses) makes it FAIL CLOSED:
+  // an empty, missing or malformed list means "off" everywhere. (Default false only so the Phase 0+1 factory tests keep their meaning.)
+  const listProvided = Array.isArray(opts.allowedHosts) && opts.allowedHosts.length > 0;
+  const allowedHosts = (Array.isArray(opts.allowedHosts) ? opts.allowedHosts : []).filter(function(h){ return typeof h === "string" && /^[A-Za-z0-9.-]+$/.test(h); }).map(function(h){ return h.toLowerCase(); });
+  const requireAllowList = opts.requireAllowList === true;
   const getHost = opts.getHost || function(){ return location.hostname; };
   const OUTBOX_KEY = "ethixoOutbox", KILL_KEY = "ethixoSyncKill";
   const STATE_KEYS = ["timelog","lastLesson","lastActive","chosenLevel","dashboardSeenNoticedIds"];
@@ -791,7 +795,7 @@ function createEthixoSync(opts){
   // default (off) path performs no storage access at all.
   function mode(){
     if(baseMode === "off") return "off";
-    if(allowedHosts.length){ try{ if(allowedHosts.indexOf(getHost()) === -1) return "off"; }catch(e){ return "off"; } }
+    if(requireAllowList || listProvided){ try{ if(!allowedHosts.length || allowedHosts.indexOf(String(getHost()).toLowerCase()) === -1) return "off"; }catch(e){ return "off"; } }
     try{ if(getStorage().getItem(KILL_KEY) === "1") return "off"; }catch(e){ /* unreadable storage: stay as built */ }
     return baseMode;
   }
@@ -885,7 +889,7 @@ function createEthixoSync(opts){
     constants: { OUTBOX_KEY:OUTBOX_KEY, KILL_KEY:KILL_KEY, MAX_OUTBOX:MAX_OUTBOX, MAX_TRIES:MAX_TRIES },
   };
 }
-const ETHIXO_SYNC = createEthixoSync({ mode: DB_SYNC_MODE, allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" ? DB_SYNC_ALLOWED_HOSTS : []) });
+const ETHIXO_SYNC = createEthixoSync({ mode: DB_SYNC_MODE, requireAllowList: true, allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" ? DB_SYNC_ALLOWED_HOSTS : []) });
 /* ETHIXO-SYNC-END */
 
 /* ETHIXO-AUTH-BEGIN
@@ -906,6 +910,8 @@ function createEthixoAuth(opts){
   const cfg = opts.config || {};
   const getStorage = opts.getStorage || function(){ return localStorage; };
   const now = opts.now || function(){ return Date.now(); };
+  const hostList = (Array.isArray(opts.allowedHosts) ? opts.allowedHosts : []).filter(function(h){ return typeof h === "string" && /^[A-Za-z0-9.-]+$/.test(h); }).map(function(h){ return h.toLowerCase(); });
+  const getHost = opts.getHost || function(){ return location.hostname; };
   const setTimer = opts.setTimer || function(f, ms){ return setTimeout(f, ms); };
   const clearTimer = opts.clearTimer || function(id){ clearTimeout(id); };
   const getLocks = opts.getLocks || function(){ return (typeof navigator !== "undefined" && navigator.locks) || null; };
@@ -924,8 +930,14 @@ function createEthixoAuth(opts){
   let pendingLevel = null, reauthed = false, identityChanged = false, warned = false;
 
   // The ONLY activation gate. baseMode is a build-time constant, so "off" returns before any other work.
+  // Fail closed: also needs a NON-EMPTY allow-list that explicitly contains the current hostname (checked here
+  // independently of the sync layer, so a missing/empty list can never activate auth).
+  function hostAllowed(){
+    try{ return hostList.length > 0 && hostList.indexOf(String(getHost()).toLowerCase()) !== -1; }catch(e){ return false; }
+  }
   function isActive(){
     if(baseMode === "off") return false;
+    if(!hostAllowed()) return false;
     try{ return !!sync && sync.mode() !== "off"; }catch(e){ return false; }
   }
 
@@ -1030,14 +1042,17 @@ function createEthixoAuth(opts){
     if(!row){
       const r = await c.rpc("create_my_profile", { p_role:"student", p_display_name:DISPLAY_NAME, p_level:level });
       if(r.error){
-        if(String(r.error.code) !== "23505") throw r.error;   // 23505 = already exists (second tab / lost response) = success
-        row = await selectProfile(c, uid);
+        if(String(r.error.code) !== "23505") throw r.error;
+        // 23505 = "profile already exists" (second tab / lost response). It counts as success ONLY if the row can be
+        // read back and is a student profile; otherwise it is a failure (bounded retry via the normal backoff).
+        row = await selectProfile(c, uid);                       // a failing query throws => normal bounded retry/config handling
+        if(!row){ const x = new Error("duplicate reported but no profile row readable"); x.code = "ethixo_dup_no_row"; throw x; }
       } else {
         row = { id:uid, role:"student", level:level };
       }
     }
-    if(row && row.role && row.role !== "student"){ status = "disabled"; warnOnce("profile-not-student"); return false; }
-    if(row && row.level !== level){
+    if(!row || row.role !== "student"){ status = "disabled"; warnOnce("profile-not-student"); return false; }   // wrong/unknown role: safe stop, never profile-ok
+    if(row.level !== level){
       const u = await c.from("profiles").update({ level: level }).eq("id", uid);
       if(u.error) throw u.error;
     }
@@ -1130,6 +1145,7 @@ function createEthixoAuth(opts){
 }
 const ETHIXO_AUTH = createEthixoAuth({
   mode: DB_SYNC_MODE, sync: ETHIXO_SYNC,
+  allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" ? DB_SYNC_ALLOWED_HOSTS : []),
   config: { url: SUPABASE_URL, key: SUPABASE_PUBLISHABLE_KEY, libPath: SUPABASE_LIB_PATH },
 });
 /* ETHIXO-AUTH-END */

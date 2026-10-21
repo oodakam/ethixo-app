@@ -18,12 +18,13 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // ---------- the flag-on build (in memory + temp dir only) ----------
 const committed = fs.readFileSync(path.join(repo, "index.html"), "utf8");
-function flagOnHtml(allowedHosts){
+function flagOnHtml(allowedHosts, opt){
+  opt = opt || {};
   const rep = [
     ['const DB_SYNC_MODE = "off";', 'const DB_SYNC_MODE = "shadow";'],
     ['const SUPABASE_URL = "__SET_ME__";', 'const SUPABASE_URL = "' + MOCK + '";'],
     ['const SUPABASE_PUBLISHABLE_KEY = "__SET_ME__";', 'const SUPABASE_PUBLISHABLE_KEY = "' + MOCK_KEY + '";'],
-    ['const DB_SYNC_ALLOWED_HOSTS = [];', 'const DB_SYNC_ALLOWED_HOSTS = ' + JSON.stringify(allowedHosts) + ';'],
+    ['const DB_SYNC_ALLOWED_HOSTS = [];\n', opt.missingList ? '' : 'const DB_SYNC_ALLOWED_HOSTS = ' + JSON.stringify(allowedHosts) + ';\n'],
   ];
   let h = committed;
   rep.forEach(([a, b]) => { if(h.split(a).length !== 2) throw new Error("test build: marker not found exactly once: " + a); h = h.replace(a, b); });
@@ -43,8 +44,8 @@ function serve(dir){
 // ---------- the mock Supabase ----------
 function b64u(o){ return Buffer.from(typeof o === "string" ? o : JSON.stringify(o)).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_"); }
 function makeMock(){
-  const m = { mode:"ok", log:[], users:0, profiles:{}, dupOnce:false, tokens:{} };
-  m.reset = () => { m.mode = "ok"; m.log = []; m.dupOnce = false; };
+  const m = { mode:"ok", log:[], users:0, profiles:{}, dupOnce:false, dupMode:"student", tokens:{} };
+  m.reset = () => { m.mode = "ok"; m.log = []; m.dupOnce = false; m.dupMode = "student"; };
   m.handler = async function(route){
     const req = route.request(), url = new URL(req.url()), method = req.method();
     const cors = { "access-control-allow-origin": "*", "access-control-allow-methods": "*", "access-control-allow-headers": req.headers()["access-control-request-headers"] || "*", "access-control-expose-headers": "*" };
@@ -77,7 +78,8 @@ function makeMock(){
     }
     if(url.pathname === "/rest/v1/rpc/create_my_profile" && method === "POST"){
       if(m.profiles[uid] || m.dupOnce){
-        if(m.dupOnce && !m.profiles[uid]) m.profiles[uid] = { id:uid, role:body.p_role, level:body.p_level, display_name:body.p_display_name };
+        if(m.dupOnce && !m.profiles[uid] && m.dupMode === "student") m.profiles[uid] = { id:uid, role:body.p_role, level:body.p_level, display_name:body.p_display_name };
+        if(m.dupOnce && !m.profiles[uid] && m.dupMode === "teacher") m.profiles[uid] = { id:uid, role:"teacher", level:null, display_name:"T" };
         m.dupOnce = false;
         return json(409, { code:"23505", message:"profile already exists", details:null, hint:null });
       }
@@ -97,7 +99,7 @@ function makeMock(){
 // ---------- harness ----------
 async function newCtx(browser, mock, port, seed){
   const ctx = await browser.newContext({ viewport:{ width:1200, height:900 } });
-  const other = [];
+  const other = [], local = [];
   await ctx.addInitScript((seedJson) => {
     window.__log = { storage:[], listeners:[], timers:[] };
     const P = Storage.prototype;
@@ -107,11 +109,11 @@ async function newCtx(browser, mock, port, seed){
   }, JSON.stringify(seed || null));
   await ctx.route("**/*", function(route){
     const u = route.request().url();
-    if(u.startsWith("http://127.0.0.1:" + port)) return route.continue();
+    if(u.startsWith("http://127.0.0.1:" + port)){ local.push(u); return route.continue(); }
     if(u.startsWith(MOCK + "/")) return mock.handler(route);
     other.push(u); return route.abort();
   });
-  return { ctx, other };
+  return { ctx, other, local };
 }
 async function open(ctx, port){
   const page = await ctx.newPage(); const errors = [], consoles = [];
@@ -133,9 +135,11 @@ const paths = (mock) => summary(mock).join(" | ");
     fs.copyFileSync(path.join(repo, "assets", "vendor", "supabase-js-2.117.2.umd.js"), path.join(d, "assets", "vendor", "supabase-js-2.117.2.umd.js")); return d; };
   const onDir = mkSite("on", flagOnHtml(["127.0.0.1"]));
   const wrongHostDir = mkSite("wronghost", flagOnHtml(["ethixo-preview.example.test"]));
+  const emptyListDir = mkSite("emptylist", flagOnHtml([]));
+  const missingListDir = mkSite("missinglist", flagOnHtml([], { missingList:true }));
   const origDir = mkSite("orig", execFileSync("git", ["-C", repo, "show", "d0ebdf0:index.html"], { maxBuffer: 1 << 26 }).toString());
   const offDir = mkSite("off", committed);
-  const ON = await serve(onDir), WRONG = await serve(wrongHostDir), ORIG = await serve(origDir), OFF = await serve(offDir);
+  const ON = await serve(onDir), WRONG = await serve(wrongHostDir), EMPTY = await serve(emptyListDir), MISSING = await serve(missingListDir), ORIG = await serve(origDir), OFF = await serve(offDir);
   const browser = await chromium.launch({ executablePath: exe, args: ["--no-sandbox"] });
   const mock = makeMock();
 
@@ -168,6 +172,29 @@ const paths = (mock) => summary(mock).join(" | ");
     assert(await page.evaluate(() => ETHIXO_SYNC.mode()) === "off", "ETHIXO_SYNC.mode() reports off");
     assert(!Object.keys(await dumpLS(page)).some(k => /^ethixoAuth/.test(k)), "no auth keys");
     assert(errors.length === 0, "no JavaScript errors");
+    await ctx.close();
+  }
+
+  console.log("\nTest 2b: flag ON but allow-list EMPTY or MISSING - fail closed in a real browser (no host is allowed implicitly)");
+  assert(/const DB_SYNC_ALLOWED_HOSTS = \[\];/.test(fs.readFileSync(path.join(emptyListDir, "index.html"), "utf8")) && !/DB_SYNC_ALLOWED_HOSTS\s*=/.test(fs.readFileSync(path.join(missingListDir, "index.html"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter(l => /^const DB_SYNC_ALLOWED_HOSTS/.test(l)).join("\n")), "test builds: one has an empty list, one has the constant removed entirely");
+  for(const [label, S] of [["empty []", EMPTY], ["missing constant", MISSING]]){
+    mock.reset();
+    const { ctx, local } = await newCtx(browser, mock, S.port, null);
+    const { page, errors } = await open(ctx, S.port);
+    await page.evaluate(() => { enterAsStudent(); state.level = "P6"; chooseLevel(); }); await page.waitForTimeout(1200);
+    assert(reqs(mock).length === 0, label + ": chooseLevel makes ZERO requests to the mock");
+    assert(!local.some(u => /assets\/vendor/.test(u)), label + ": the vendored library is never requested");
+    assert(await page.evaluate(() => ETHIXO_SYNC.mode()) === "off", label + ": ETHIXO_SYNC.mode() is off even though the flag is \"shadow\"");
+    assert(!Object.keys(await dumpLS(page)).some(k => /^ethixoAuth|^sb-/.test(k)), label + ": no auth keys created");
+    assert(errors.length === 0, label + ": no JavaScript errors");
+    await ctx.close();
+  }
+  {
+    mock.reset();
+    const { ctx, local } = await newCtx(browser, mock, ON.port, null);
+    const { page } = await open(ctx, ON.port);
+    await page.evaluate(() => { state.level = "P6"; chooseLevel(); }); await waitStatus(page, ["profile-ok"]);
+    assert(reqs(mock).length > 0 && local.some(u => /assets\/vendor/.test(u)), "positive control: the explicitly allow-listed host (127.0.0.1) DOES activate against the local mock and load the library");
     await ctx.close();
   }
 
@@ -251,13 +278,22 @@ const paths = (mock) => summary(mock).join(" | ");
     await ctx.close();
   }
 
-  console.log("\nTest 6: duplicate profile creation (server says 23505)");
-  {
-    mock.reset(); mock.users = 0; mock.profiles = {}; mock.tokens = {}; mock.dupOnce = true;
+  console.log("\nTest 6: duplicate profile (23505) counts as success only if a student profile can be read back");
+  for(const [label, dupMode, expect] of [["student profile exists", "student", "profile-ok"], ["NO profile row readable", "none", "degraded"], ["a NON-student (teacher) profile", "teacher", "disabled"]]){
+    mock.reset(); mock.users = 0; mock.profiles = {}; mock.tokens = {}; mock.dupOnce = true; mock.dupMode = dupMode;
     const { ctx } = await newCtx(browser, mock, ON.port, null); const { page, errors, consoles } = await open(ctx, ON.port);
     await page.evaluate(() => { state.level = "P6"; chooseLevel(); });
-    assert(await waitStatus(page, ["profile-ok"]) === "profile-ok", "23505 handled as success => profile-ok");
-    assert(errors.length === 0 && !consoles.some(c => /^warning.*Ethixo auth/.test(c)), "no error, no warning");
+    const st = await waitStatus(page, [expect], 4000); await page.waitForTimeout(700);
+    assert(st === expect, "23505 + " + label + " => " + expect + " (got " + st + ")");
+    assert(errors.length === 0, "  ...no JavaScript errors");
+    const ls = await dumpLS(page);
+    if(expect === "profile-ok"){ assert(!!ls.ethixoAuthMeta && !consoles.some(c => /Ethixo auth/.test(c)), "  ...identity marker written, no warning"); }
+    else {
+      assert(!ls.ethixoAuthMeta, "  ...identity marker NOT written (profile was never confirmed)");
+      assert(!reqs(mock).some(e => e.method === "PATCH"), "  ...no profile update attempted");
+      const n = reqs(mock).filter(e => /create_my_profile/.test(e.path)).length;
+      assert(n === 1, "  ...exactly one create_my_profile call in the first second, no tight loop (" + n + ")");
+    }
     await ctx.close();
   }
 
@@ -323,7 +359,7 @@ const paths = (mock) => summary(mock).join(" | ");
     await ctx.close();
   }
 
-  await browser.close(); [ON, WRONG, ORIG, OFF].forEach(x => x.srv.close()); fs.rmSync(tmp, { recursive:true, force:true });
+  await browser.close(); [ON, WRONG, EMPTY, MISSING, ORIG, OFF].forEach(x => x.srv.close()); fs.rmSync(tmp, { recursive:true, force:true });
   console.log("\n" + "=".repeat(50)); console.log("RESULTS: " + passed + " passed, " + failed + " failed"); console.log("=".repeat(50));
   process.exit(failed ? 1 : 0);
 })().catch(e => { console.error("HARNESS ERROR", e); process.exit(2); });

@@ -66,10 +66,13 @@ function make(over, scriptOver){
   const client = fakeClient(scriptOver);
   const created = [];
   const syncMode = over.syncMode || "shadow";
-  const sync = over.sync || createEthixoSync({ mode: syncMode, getStorage: () => storage, allowedHosts: over.allowedHosts, getHost: over.getHost });
+  const hosts = over.allowedHosts === undefined ? ["app.test"] : over.allowedHosts;
+  const getHostFn = over.getHost || (() => "app.test");
+  const sync = over.sync || createEthixoSync({ mode: syncMode, getStorage: () => storage, allowedHosts: hosts, getHost: getHostFn, requireAllowList: true });
   const cfg = over.config || { url:"https://mock-project.supabase.test", key:"sb_publishable_TESTKEY", libPath:"x.js" };
   const auth = createEthixoAuth({
     mode: over.mode === undefined ? "shadow" : over.mode, sync: sync, config: cfg, getStorage: () => storage,
+    allowedHosts: hosts, getHost: getHostFn,
     now: () => spies.now,
     setTimer: (fn, ms) => { const t = { fn, ms, id: spies.timers.length + 1 }; spies.timers.push(t); return t.id; },
     clearTimer: (id) => { spies.cleared.push(id); },
@@ -191,18 +194,69 @@ console.log("\nTest 5: returning student - no new sign-in, no new profile");
   assert(!m.client.calls.some(c => c[0] === "rpc"), "level mismatch: no second profile created");
 }
 
-console.log("\nTest 6: duplicate profile (23505) is success");
+console.log("\nTest 6: duplicate profile (23505) is success ONLY if a student profile can be read back");
+const DUP = { data:null, error:{ code:"23505", message:"profile already exists" } };
 {
-  const m = make({}, { selectQueue:[{ data:null, error:null }, OK_PROFILE], rpcResults:[{ data:null, error:{ code:"23505", message:"profile already exists" } }] });
+  const m = make({}, { selectQueue:[{ data:null, error:null }, OK_PROFILE], rpcResults:[DUP] });
   await m.auth.studentActive("P6");
-  assert(m.auth.status() === "profile-ok", "23505 => profile-ok");
-  assert(m.spies.timers.length === 0 && m.spies.warns.length === 0, "no retry, no warning");
-  assert(m.client.calls.filter(c => c[0] === "rpc").length === 1, "rpc not repeated");
+  assert(m.auth.status() === "profile-ok", "23505 followed by an existing student profile => profile-ok");
+  assert(m.spies.timers.length === 0 && m.spies.warns.length === 0, "  ...no retry, no warning");
+  assert(m.client.calls.filter(c => c[0] === "rpc").length === 1, "  ...rpc not repeated");
+  assert(JSON.parse(m.storage.data.ethixoAuthMeta).uid === "uid-1", "  ...identity marker written only now");
 }
 {
-  const m = make({}, { selectQueue:[{ data:null, error:null }, { data:null, error:null }], rpcResults:[{ data:null, error:{ code:"23505", message:"x" } }] });
+  const m = make({}, { selectQueue:[{ data:null, error:null }, { data:{ id:"uid-1", role:"student", level:"P5" }, error:null }], rpcResults:[DUP] });
   await m.auth.studentActive("P6");
-  assert(m.auth.status() === "profile-ok", "23505 then re-select empty still does not crash");
+  assert(m.auth.status() === "profile-ok" && m.client.calls.filter(c => c[0] === "update").length === 1, "23505 + existing student profile with another level => profile-ok after a level-only update");
+}
+{
+  // 23505 but the profile cannot be found: NOT profile-ok, bounded retry
+  const rp = []; for(let i = 0; i < 30; i++) rp.push(DUP);
+  const m = make({}, { selectQueue:[], rpcResults: rp });                 // every select returns "no row"
+  await m.auth.studentActive("P6");
+  assert(m.auth.status() !== "profile-ok", "23505 followed by NO profile => not profile-ok (status " + m.auth.status() + ")");
+  assert(m.auth.status() === "degraded" && m.spies.timers.length === 1, "  ...safe failure state: degraded + a single scheduled retry");
+  assert(!("ethixoAuthMeta" in m.storage.data), "  ...identity marker NOT written");
+  let guard = 0;
+  while(m.spies.timers.length && guard < 50){ const t = m.spies.timers.splice(0)[0]; guard++; t.fn(); await tick(); if(m.spies.timers.length === 0) break; }
+  const rpcs = m.client.calls.filter(c => c[0] === "rpc").length;
+  assert(rpcs === 1 + m.auth.constants.MAX_TRIES, "  ...NO infinite retries: exactly 1 + MAX_TRIES (" + (1 + m.auth.constants.MAX_TRIES) + ") rpc attempts, got " + rpcs);
+  assert(m.spies.timers.length === 0 && m.auth.status() === "degraded", "  ...after the cap no timer remains (parked), still not profile-ok");
+  await m.auth.studentActive("P6"); await tick();
+  assert(m.client.calls.filter(c => c[0] === "rpc").length === rpcs + 1 && m.spies.timers.length === 0, "  ...a later explicit student action makes one more attempt only, no new timer chain");
+}
+{
+  const m = make({}, { selectQueue:[{ data:null, error:null }, { data:null, error:null }, OK_PROFILE], rpcResults:[DUP, DUP] });
+  await m.auth.studentActive("P6");
+  assert(m.auth.status() === "degraded", "duplicate but row not yet visible => degraded");
+  if(m.spies.timers[0]){ m.spies.timers[0].fn(); await tick(); }
+  assert(m.auth.status() === "profile-ok", "  ...and once the student profile is readable the retry reaches profile-ok");
+}
+for(const [label, row] of [["teacher", { id:"uid-1", role:"teacher", level:null }], ["unknown role 'admin'", { id:"uid-1", role:"admin", level:"P6" }], ["missing role", { id:"uid-1", level:"P6" }], ["null role", { id:"uid-1", role:null, level:"P6" }]]){
+  const m = make({}, { selectQueue:[{ data:null, error:null }, { data: row, error:null }], rpcResults:[DUP] });
+  await m.auth.studentActive("P6");
+  assert(m.auth.status() === "disabled", "23505 followed by a " + label + " profile => disabled (never profile-ok)");
+  assert(!m.client.calls.some(c => c[0] === "update") && m.spies.timers.length === 0 && !("ethixoAuthMeta" in m.storage.data), "  ...no update, no retry, no identity marker");
+  assert(m.client.calls.filter(c => c[0] === "rpc").length === 1, "  ...rpc not repeated");
+}
+for(const [label, err, expect] of [["network error", { message:"TypeError: Failed to fetch", code:"" }, "degraded"], ["HTTP 500", { status:500, message:"x", code:"" }, "degraded"], ["HTTP 403 (permission)", { status:403, message:"denied", code:"42501" }, "disabled"], ["expired JWT", { status:401, code:"PGRST301", message:"JWT expired" }, "degraded"]]){
+  const m = make({}, { selectQueue:[{ data:null, error:null }, { data:null, error: err }, { data:null, error:null }, { data:null, error:null }], rpcResults:[DUP, DUP, DUP] });
+  await m.auth.studentActive("P6");
+  assert(m.auth.status() === expect, "23505 followed by a FAILED profile query (" + label + ") => " + expect + " (got " + m.auth.status() + ")");
+  assert(m.auth.status() !== "profile-ok" && !("ethixoAuthMeta" in m.storage.data), "  ...not profile-ok, no identity marker");
+}
+{
+  const sq = []; for(let i = 0; i < 20; i++){ sq.push({ data:null, error:null }); sq.push({ data:null, error:{ status:500, message:"x", code:"" } }); }
+  const rp = []; for(let i = 0; i < 20; i++) rp.push(DUP);
+  const m = make({}, { selectQueue: sq, rpcResults: rp });
+  await m.auth.studentActive("P6");
+  let guard = 0; while(m.spies.timers.length && guard < 50){ const t = m.spies.timers.splice(0)[0]; guard++; t.fn(); await tick(); }
+  assert(m.auth.status() === "degraded" && m.client.calls.filter(c => c[0] === "rpc").length <= 1 + m.auth.constants.MAX_TRIES, "23505 + repeatedly failing read-back: bounded, ends degraded (rpc attempts " + m.client.calls.filter(c => c[0] === "rpc").length + ")");
+}
+{
+  const m = make({}, { selectQueue:[{ data:null, error:null }, { data:null, error:null }], rpcResults:[DUP] });
+  await m.auth.studentActive("P6");
+  assert(m.auth.status() === "degraded", "(replaces the old 'does not crash' check) 23505 then empty re-select no longer reports success");
 }
 
 console.log("\nTest 7: coalescing - simultaneous calls make one sign-in and one profile");
@@ -376,9 +430,73 @@ console.log("\nTest 17: existing functions are untouched; exactly three guarded 
   // everything outside the approved regions is unchanged
   const strip = (s) => s.replace(/\/\* ETHIXO-CONFIG-BEGIN[\s\S]*?ETHIXO-CONFIG-END \*\/\n\n/, "").replace(/\n\/\* ETHIXO-AUTH-BEGIN[\s\S]*?ETHIXO-AUTH-END \*\/\n/, "")
     .replace(/\n\s*try\{ ETHIXO_AUTH\.studentActive\([^)]*\); \}catch\(_e\)\{[^}]*\}/g, "").replace(/ try\{ ETHIXO_AUTH\.studentActive\([^)]*\); \}catch\(_e\)\{[^}]*\}/g, "")
-    .replace(/\n    if\(allowedHosts\.length\)\{[^\n]*\n/, "\n").replace(/\n  const allowedHosts = [^\n]*\n  const getHost = [^\n]*\n/, "\n")
-    .replace(', allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" ? DB_SYNC_ALLOWED_HOSTS : [])', "");
+    .replace(/  \/\/ Host allow-list\.[\s\S]*?  const getHost = [^\n]*\n/, "")
+    .replace(/    if\(requireAllowList \|\| listProvided\)\{[^\n]*\n/, "")
+    .replace(", requireAllowList: true, allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== \"undefined\" ? DB_SYNC_ALLOWED_HOSTS : [])", "");
   assert(strip(html) === orig, "removing the approved Phase 2 additions restores the Phase 0+1 index.html exactly (nothing else changed)");
+}
+
+console.log("\nTest 18: host allow-list FAILS CLOSED (empty / missing / malformed list => off; only an explicitly listed host works)");
+{
+  const st = () => fakeStorage();
+  const mk2 = (o) => createEthixoSync(Object.assign({ mode:"shadow", getStorage: st, requireAllowList:true, getHost: () => "preview.example.test" }, o));
+  assert(mk2({ allowedHosts: [] }).mode() === "off", "empty allow-list => off (app configuration)");
+  assert(mk2({}).mode() === "off", "missing allow-list => off");
+  assert(mk2({ allowedHosts: undefined }).mode() === "off" && mk2({ allowedHosts: null }).mode() === "off", "undefined / null allow-list => off");
+  for(const bad of ["preview.example.test", {}, 5, true]) assert(mk2({ allowedHosts: bad }).mode() === "off", "non-array allow-list " + JSON.stringify(bad) + " => off");
+  for(const list of [["*"], ["*.example.test"], [""], [" "], ["preview.example.test/"], ["https://preview.example.test"], ["preview.example.test:443"], [null], [123], [["preview.example.test"]]])
+    assert(mk2({ allowedHosts: list }).mode() === "off", "unusable entries " + JSON.stringify(list) + " => off (no wildcard, no scheme, no port, no empty)");
+  assert(mk2({ allowedHosts: ["ethixo.ai", "test.ethixo.ai"] }).mode() === "off", "a non-allow-listed host (even ethixo.ai / test.ethixo.ai listed for others) => off");
+  assert(mk2({ allowedHosts: ["other.example.test"] }).mode() === "off", "host not in a non-empty list => off");
+  assert(mk2({ allowedHosts: ["preview.example.test"] }).mode() === "shadow", "explicitly allow-listed host => shadow (positive control)");
+  assert(mk2({ allowedHosts: ["PREVIEW.example.test"] }).mode() === "shadow", "match is case-insensitive");
+  assert(mk2({ allowedHosts: ["preview.example.test"], getHost: () => { throw new Error("x"); } }).mode() === "off", "host lookup error => off");
+  assert(mk2({ allowedHosts: ["preview.example.test"], getHost: () => "" }).mode() === "off" && mk2({ allowedHosts: [""], getHost: () => "" }).mode() === "off", "empty hostname (file://) never matches");
+  assert(createEthixoSync({ mode:"off", allowedHosts:["preview.example.test"], requireAllowList:true, getHost: () => "preview.example.test", getStorage: st }).mode() === "off", "flag off stays off even when the host is allow-listed");
+  const kill = createEthixoSync({ mode:"shadow", allowedHosts:["preview.example.test"], requireAllowList:true, getHost: () => "preview.example.test", getStorage: () => fakeStorage({ ethixoSyncKill:"1" }) });
+  assert(kill.mode() === "off", "kill switch still wins on an allow-listed host");
+  assert(createEthixoSync({ mode:"shadow", getStorage: st }).mode() === "shadow", "Phase 0+1 factory default (no requireAllowList, no list) is unchanged - only the APP opts in to fail-closed");
+  assert(/createEthixoSync\(\{ mode: DB_SYNC_MODE, requireAllowList: true,/.test(html), "the app's ETHIXO_SYNC instance is built with requireAllowList: true");
+}
+console.log("\nTest 19: the real app wiring with DB_SYNC_MODE patched to shadow in a throw-away copy of the source");
+{
+  const run = (src, host) => new Function("location", src + "; return { sync: ETHIXO_SYNC.mode(), auth: ETHIXO_AUTH, kill: 0 };")({ hostname: host });
+  const flip = (src) => src.replace('const DB_SYNC_MODE = "off";', 'const DB_SYNC_MODE = "shadow";');
+  const noCfg = (src) => src.replace(/const DB_SYNC_ALLOWED_HOSTS = \[\];\n/, "");
+  const withList = (src, arr) => src.replace("const DB_SYNC_ALLOWED_HOSTS = [];", "const DB_SYNC_ALLOWED_HOSTS = " + JSON.stringify(arr) + ";");
+  const cfgOk = (src) => src.replace('const SUPABASE_URL = "__SET_ME__";', 'const SUPABASE_URL = "https://mock-project.supabase.test";').replace('const SUPABASE_PUBLISHABLE_KEY = "__SET_ME__";', 'const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_MOCK1234";');
+  assert(flip(fullSrc) !== fullSrc && noCfg(fullSrc) !== fullSrc && withList(fullSrc, ["a.test"]) !== fullSrc, "patch helpers actually change the source");
+  const probe = async (src, host) => {   // returns {sync, requests} - the auth factory is driven with a library spy
+    const f = new Function("location", src + "; return { ETHIXO_SYNC, createEthixoAuth, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_LIB_PATH, DB_SYNC_MODE, hosts: (typeof DB_SYNC_ALLOWED_HOSTS !== 'undefined' ? DB_SYNC_ALLOWED_HOSTS : undefined) };")({ hostname: host });
+    const calls = []; const client = fakeClient({ selectQueue:[{ data:null, error:null }] });
+    // rebuild an auth instance exactly the way the app does (same sync instance, same config, same allow-list)
+    const a = f.createEthixoAuth({ mode: f.DB_SYNC_MODE, sync: f.ETHIXO_SYNC, allowedHosts: f.hosts, getHost: () => host,
+      config: { url: f.SUPABASE_URL, key: f.SUPABASE_PUBLISHABLE_KEY, libPath: f.SUPABASE_LIB_PATH },
+      loadLibrary: async () => { calls.push("library"); return { createClient: () => client }; }, getStorage: () => fakeStorage(), setTimer: () => 1, clearTimer: () => {}, addListener: () => {}, getLocks: () => null, warn: () => {} });
+    await a.studentActive("P6"); await tick();
+    return { sync: f.ETHIXO_SYNC.mode(), library: calls.length, client: client.calls.length, status: a.status() };
+  };
+  const shadowOk = (src) => cfgOk(flip(src));
+  let r;
+  r = await probe(shadowOk(fullSrc), "a.test");
+  assert(r.sync === "off" && r.library === 0 && r.client === 0, "flag on + allow-list EMPTY ([]) => sync off, library not loaded, no client call");
+  r = await probe(noCfg(shadowOk(fullSrc)), "a.test");
+  assert(r.sync === "off" && r.library === 0 && r.client === 0, "flag on + allow-list constant MISSING => sync off, library not loaded, no client call");
+  r = await probe(withList(shadowOk(fullSrc), ["other.test"]), "a.test");
+  assert(r.sync === "off" && r.library === 0 && r.client === 0, "flag on + host not allow-listed => off, inert");
+  r = await probe(withList(shadowOk(fullSrc), ["ethixo.ai", "test.ethixo.ai"]), "ethixo.ai");
+  assert(r.sync === "shadow", "(sanity of the helper) listing ethixo.ai WOULD enable it - which is why the committed list must stay empty");
+  r = await probe(withList(shadowOk(fullSrc), ["a.test"]), "a.test");
+  assert(r.sync === "shadow" && r.library === 1 && r.status === "profile-ok", "flag on + explicitly allow-listed host => runs against the fake client (positive control)");
+  r = await probe(withList(fullSrc, ["a.test"]), "a.test");
+  assert(r.sync === "off" && r.library === 0 && r.client === 0, "allow-listed host but DB_SYNC_MODE \"off\" => off");
+  // the auth module is independently fail-closed even if handed a permissive sync stub
+  for(const hosts of [undefined, [], ["other.test"], ["*"]]){
+    const m = make({ allowedHosts: hosts, getHost: () => "a.test", sync: { mode: () => "shadow" } });
+    await m.auth.studentActive("P6"); await tick();
+    assert(m.spies.libraryLoads === 0 && m.client.calls.length === 0 && m.spies.timers.length === 0 && m.storage.log.length === 0, "auth alone, permissive sync stub, allow-list " + JSON.stringify(hosts) + " => library never loaded, no call");
+  }
+  assert(/DB_SYNC_ALLOWED_HOSTS = \[\];/.test(html) && /const DB_SYNC_MODE = "off";/.test(html), "committed code: empty allow-list and DB_SYNC_MODE \"off\"");
 }
 
 console.log("\n" + "=".repeat(50));
