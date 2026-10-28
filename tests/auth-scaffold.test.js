@@ -428,12 +428,22 @@ console.log("\nTest 17: existing functions are untouched; exactly three guarded 
   const guarded = html.match(/try\{ ETHIXO_AUTH\.studentActive\([^)]*\); \}catch\(_e\)\{[^}]*\}/g) || [];
   assert(guarded.length === 3, "all three wrapped in try/catch");
   // everything outside the approved regions is unchanged
-  const strip = (s) => s.replace(/\/\* ETHIXO-CONFIG-BEGIN[\s\S]*?ETHIXO-CONFIG-END \*\/\n\n/, "").replace(/\n\/\* ETHIXO-AUTH-BEGIN[\s\S]*?ETHIXO-AUTH-END \*\/\n/, "")
+  // Phase 3 (Attempts Sync) additions are reversed first, each one an exact, named edit; what is left must be Phase 2's strip.
+  const stripPhase3 = (s) => s
+    .replace(/\n\/\* ETHIXO-ATTEMPTS-BEGIN[\s\S]*?ETHIXO-ATTEMPTS-END \*\/\n/, "")
+    .replace(/  \/\/ Phase 3 options[\s\S]*?  let sender = null, seqCounter = 0;\n/, "  let sender = null;\n")
+    .replace("    if(kinds && kinds.indexOf(r.kind) === -1) return;\n", "")
+    .replace("value:(omitValues ? null : val), queuedAt:now(), seq:++seqCounter,", "value:val, queuedAt:now(),")
+    .replace("    if(onQueued){ try{ onQueued(r); }catch(e){ /* a notifier can never affect the app */ } }\n", "")
+    .replace("    if(!list.length) return summary;          // nothing queued: write nothing (no empty ethixoOutbox key is ever created)\n", "")
+    .replace(/    \/\/ Items queued \(or re-queued\) while the senders above[\s\S]*?writeBox\(merged\.length > MAX_OUTBOX \? merged\.slice\(merged\.length - MAX_OUTBOX\) : merged\);\n/, "    writeBox(keep);\n")
+    .replace(/,\n  kinds: \(\(typeof DB_ATTEMPTS_SYNC[\s\S]*?\} \}\);/, " });");
+  const strip = (s) => stripPhase3(s).replace(/\/\* ETHIXO-CONFIG-BEGIN[\s\S]*?ETHIXO-CONFIG-END \*\/\n\n/, "").replace(/\n\/\* ETHIXO-AUTH-BEGIN[\s\S]*?ETHIXO-AUTH-END \*\/\n/, "")
     .replace(/\n\s*try\{ ETHIXO_AUTH\.studentActive\([^)]*\); \}catch\(_e\)\{[^}]*\}/g, "").replace(/ try\{ ETHIXO_AUTH\.studentActive\([^)]*\); \}catch\(_e\)\{[^}]*\}/g, "")
     .replace(/  \/\/ Host allow-list\.[\s\S]*?  const getHost = [^\n]*\n/, "")
     .replace(/    if\(requireAllowList \|\| listProvided\)\{[^\n]*\n/, "")
     .replace(", requireAllowList: true, allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== \"undefined\" ? DB_SYNC_ALLOWED_HOSTS : [])", "");
-  assert(strip(html) === orig, "removing the approved Phase 2 additions restores the Phase 0+1 index.html exactly (nothing else changed)");
+  assert(strip(html) === orig, "removing the approved Phase 2 and Phase 3 additions restores the Phase 0+1 index.html exactly (nothing else changed)");
 }
 
 console.log("\nTest 18: host allow-list FAILS CLOSED (empty / missing / malformed list => off; only an explicitly listed host works)");

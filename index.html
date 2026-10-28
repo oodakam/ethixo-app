@@ -765,6 +765,9 @@ const SUPABASE_URL = "__SET_ME__";
 const SUPABASE_PUBLISHABLE_KEY = "__SET_ME__";
 const SUPABASE_LIB_PATH = "assets/vendor/supabase-js-2.117.2.umd.js"; // vendored, loaded only when auth is active
 const DB_SYNC_ALLOWED_HOSTS = [];
+// Phase 3: a SECOND, independent switch for the attempts mirror. false = DB_SYNC_MODE "shadow" stays auth + profile only
+// (exactly the Phase 2 scope). Attempts only sync when this is true AND DB_SYNC_MODE is not "off" AND the host is allow-listed.
+const DB_ATTEMPTS_SYNC = false;
 /* ETHIXO-CONFIG-END */
 
 /* ETHIXO-SYNC-BEGIN
@@ -789,7 +792,12 @@ function createEthixoSync(opts){
   const OUTBOX_KEY = "ethixoOutbox", KILL_KEY = "ethixoSyncKill";
   const STATE_KEYS = ["timelog","lastLesson","lastActive","chosenLevel","dashboardSeenNoticedIds"];
   const MAX_OUTBOX = 500, MAX_TRIES = 6, BACKOFF_MS = [5000, 30000, 300000];
-  let sender = null;
+  // Phase 3 options (all default-neutral): kinds = only these route kinds are queued; omitValues = queue the key only
+  // (the sender reads the current local value, and the queue cannot consume the localStorage quota); onQueued = notify.
+  const kinds = Array.isArray(opts.kinds) ? opts.kinds.slice() : null;
+  const omitValues = opts.omitValues === true;
+  const onQueued = typeof opts.onQueued === "function" ? opts.onQueued : null;
+  let sender = null, seqCounter = 0;
 
   // Effective mode. The kill switch is only consulted when the build flag is not "off", so the
   // default (off) path performs no storage access at all.
@@ -854,9 +862,11 @@ function createEthixoSync(opts){
     if(mode() === "off" || !sender) return;   // kill switch, or nothing able to send yet (Phase 1)
     const r = route(key);
     if(r.kind === "local") return;
+    if(kinds && kinds.indexOf(r.kind) === -1) return;
     const list = readBox().filter(function(it){ return it.key !== key; }); // newest value per key wins
-    list.push({ key:key, route:r, value:val, queuedAt:now(), tries:0, nextAt:0, parked:false });
+    list.push({ key:key, route:r, value:(omitValues ? null : val), queuedAt:now(), seq:++seqCounter, tries:0, nextAt:0, parked:false });
     writeBox(list.length > MAX_OUTBOX ? list.slice(list.length - MAX_OUTBOX) : list);
+    if(onQueued){ try{ onQueued(r); }catch(e){ /* a notifier can never affect the app */ } }
   }
 
   // Manual flush (no timers in Phase 1). sender(item) must return a promise; rejection => retry later.
@@ -865,6 +875,7 @@ function createEthixoSync(opts){
     if(mode() === "off" || !sender) return summary;
     const t = now();
     const list = readBox();
+    if(!list.length) return summary;          // nothing queued: write nothing (no empty ethixoOutbox key is ever created)
     const keep = [];
     for(let i = 0; i < list.length; i++){
       const it = list[i];
@@ -878,7 +889,18 @@ function createEthixoSync(opts){
         keep.push(it);
       }
     }
-    writeBox(keep);
+    // Items queued (or re-queued) while the senders above were awaiting the network must survive: re-read the box and let
+    // any item that is new or newer than the one this flush started with replace its stale copy.
+    const started = {};
+    list.forEach(function(it){ started[it.key] = it.queuedAt + ":" + (it.seq || 0); });
+    const merged = keep.slice();
+    readBox().forEach(function(cur){
+      const was = started[cur.key];
+      if(was !== undefined && was === cur.queuedAt + ":" + (cur.seq || 0)) return;   // unchanged since the flush began
+      for(let j = merged.length - 1; j >= 0; j--){ if(merged[j].key === cur.key) merged.splice(j, 1); }
+      merged.push(cur);
+    });
+    writeBox(merged.length > MAX_OUTBOX ? merged.slice(merged.length - MAX_OUTBOX) : merged);
     return summary;
   }
 
@@ -889,7 +911,8 @@ function createEthixoSync(opts){
     constants: { OUTBOX_KEY:OUTBOX_KEY, KILL_KEY:KILL_KEY, MAX_OUTBOX:MAX_OUTBOX, MAX_TRIES:MAX_TRIES },
   };
 }
-const ETHIXO_SYNC = createEthixoSync({ mode: DB_SYNC_MODE, requireAllowList: true, allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" ? DB_SYNC_ALLOWED_HOSTS : []) });
+const ETHIXO_SYNC = createEthixoSync({ mode: DB_SYNC_MODE, requireAllowList: true, allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" ? DB_SYNC_ALLOWED_HOSTS : []),
+  kinds: ((typeof DB_ATTEMPTS_SYNC !== "undefined" && DB_ATTEMPTS_SYNC === true) ? ["attempts"] : []), omitValues: true, onQueued: function(){ try{ ETHIXO_ATTEMPTS.schedule(); }catch(_e){ /* never affects the app */ } } });
 /* ETHIXO-SYNC-END */
 
 /* ETHIXO-AUTH-BEGIN
@@ -919,6 +942,7 @@ function createEthixoAuth(opts){
   const isVisible = opts.isVisible || function(){ return document.visibilityState !== "hidden"; };
   const loadLibrary = opts.loadLibrary || defaultLoadLibrary;
   const warnFn = opts.warn || function(m){ try{ console.warn(m); }catch(e){} };
+  const onProfileOk = typeof opts.onProfileOk === "function" ? opts.onProfileOk : null;
   const META_KEY = "ethixoAuthMeta", SESSION_KEY = "ethixoAuth", LOCK_NAME = "ethixo-auth-init";
   const DISPLAY_NAME = "Student";
   const LEVELS_OK = { P5:1, P6:1 };
@@ -1080,7 +1104,8 @@ function createEthixoAuth(opts){
         }
         status = "signed-in";
         const ok = await ensureProfile(c, session.user.id, level);
-        if(ok){ status = "profile-ok"; tries = 0; reauthed = false; recordIdentity(session.user.id); }
+        if(ok){ status = "profile-ok"; tries = 0; reauthed = false; recordIdentity(session.user.id);
+          if(onProfileOk){ try{ onProfileOk(); }catch(e){ /* a notifier can never affect sign-in */ } } }
       });
     }catch(e){
       return failed(e);
@@ -1135,8 +1160,16 @@ function createEthixoAuth(opts){
     return start();
   }
 
+  // Phase 3: the authenticated client, ONLY while active and the student profile is confirmed; otherwise null.
+  function readyClient(){
+    if(baseMode === "off") return null;
+    if(!isActive()) return null;
+    return status === "profile-ok" ? client : null;
+  }
+
   return {
     studentActive: studentActive,
+    readyClient: readyClient,
     status: function(){ return baseMode === "off" ? "off" : status; },
     identityChanged: function(){ return identityChanged; },
     classify: classify, keyProblem: keyProblem, urlProblem: urlProblem,
@@ -1147,8 +1180,162 @@ const ETHIXO_AUTH = createEthixoAuth({
   mode: DB_SYNC_MODE, sync: ETHIXO_SYNC,
   allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" ? DB_SYNC_ALLOWED_HOSTS : []),
   config: { url: SUPABASE_URL, key: SUPABASE_PUBLISHABLE_KEY, libPath: SUPABASE_LIB_PATH },
+  onProfileOk: function(){ try{ ETHIXO_ATTEMPTS.schedule(); }catch(_e){ /* never affects sign-in */ } },
 });
 /* ETHIXO-AUTH-END */
+
+/* ETHIXO-ATTEMPTS-BEGIN
+   Phase 3: Attempts Sync (shadow-write of attempts:* only; Vault and student_state are NOT synced here).
+   INERT by design:
+   - While DB_SYNC_MODE is "off" (or DB_ATTEMPTS_SYNC is false) this block does nothing at all: no sender is registered, no timer or listener is created,
+     no storage is read, nothing is sent. Every public method returns immediately.
+   - Local-first: localStorage stays the source of truth and is only ever READ here. Nothing here writes, rewrites or
+     deletes an attempt, and nothing the learning screens do waits for it. Every failure is silent and retried later.
+   - Ownership: student_id is NEVER sent. INSERT omits it (the database fills it from the login token via DEFAULT auth.uid()),
+     UPDATE only ever sends { data }, and a row is only addressed by its own key columns or row id. Row-level security
+     is the real enforcement; this code just never tries to name an owner.
+   - Writes use select -> insert/update, not upsert: the table grants forbid updating student_id, which an upsert would try.
+   - Conflict rule (Integration Plan): attempt history is append-only; the uploaded array is the UNION of remote and local
+     attempts by their "at" timestamp, so a remote attempt is never dropped. Local is never modified. */
+function createEthixoAttempts(opts){
+  opts = opts || {};
+  const baseMode = opts.mode === "shadow" || opts.mode === "on" ? opts.mode : "off";
+  if(baseMode === "off"){
+    const none = { sent:0, failed:0, parked:0, skipped:0 };
+    return { schedule: function(){}, flush: function(){ return Promise.resolve(none); }, status: function(){ return "off"; },
+             validateAttempts: validateAttempts, mergeAttempts: mergeAttempts, constants: constants() };
+  }
+  const sync = opts.sync, auth = opts.auth;
+  const getStorage = opts.getStorage || function(){ return localStorage; };
+  const now = opts.now || function(){ return Date.now(); };
+  const setTimer = opts.setTimer || function(f, ms){ return setTimeout(f, ms); };
+  const clearTimer = opts.clearTimer || function(id){ clearTimeout(id); };
+  const addListener = opts.addListener || function(type, fn){ if(type === "online") window.addEventListener("online", fn); else document.addEventListener(type, fn); };
+  const isVisible = opts.isVisible || function(){ return document.visibilityState !== "hidden"; };
+  const warnFn = opts.warn || function(m){ try{ console.warn(m); }catch(e){} };
+  const DEBOUNCE_MS = 2000;
+  let timer = null, timerDue = 0, busy = false, current = null, again = false, listenersOn = false, lastResult = "idle";
+  const warned = {};
+  function warnOnce(tag){ if(warned[tag]) return; warned[tag] = true; warnFn("Ethixo attempts sync: " + tag); }   // tags only, never ids, answers or tokens
+
+  function constants(){ return { TABLE:"attempts", MAX_ATTEMPTS:1000, MAX_BYTES:150000, DEBOUNCE_MS:2000 }; }
+
+  // ---- pure helpers ----
+  // The teacher summary casts score / at / usedThinking of EVERY element; one malformed element would break it for a whole
+  // class, so only well-formed arrays are ever uploaded.
+  function validateAttempts(arr){
+    if(!Array.isArray(arr)) return { ok:false, reason:"not-an-array" };
+    if(arr.length === 0) return { ok:false, reason:"empty" };
+    if(arr.length > 1000) return { ok:false, reason:"too-many" };
+    for(let i = 0; i < arr.length; i++){
+      const e = arr[i];
+      if(!e || typeof e !== "object" || Array.isArray(e)) return { ok:false, reason:"bad-element" };
+      if("score" in e && e.score !== null && !(typeof e.score === "number" && isFinite(e.score))) return { ok:false, reason:"bad-score" };
+      if("at" in e && e.at !== null && !(typeof e.at === "number" && isFinite(e.at))) return { ok:false, reason:"bad-at" };
+      if("usedThinking" in e && e.usedThinking !== null && typeof e.usedThinking !== "boolean") return { ok:false, reason:"bad-usedThinking" };
+    }
+    let size; try{ size = JSON.stringify(arr).length; }catch(e){ return { ok:false, reason:"unserialisable" }; }
+    if(size > 150000) return { ok:false, reason:"too-large" };
+    return { ok:true };
+  }
+  function elKey(e){ return (e && typeof e.at === "number") ? "at:" + e.at : "j:" + JSON.stringify(e); }
+  // Union by "at" (remote first, then local; the local copy wins an identical timestamp), ordered by time. Never drops.
+  function mergeAttempts(remote, local){
+    const out = [], seen = {};
+    function put(e){ const k = elKey(e); if(Object.prototype.hasOwnProperty.call(seen, k)){ out[seen[k]] = e; return; } seen[k] = out.length; out.push(e); }
+    (Array.isArray(remote) ? remote : []).forEach(put);
+    (Array.isArray(local) ? local : []).forEach(put);
+    const idx = out.map(function(e, i){ return { e:e, i:i }; });
+    idx.sort(function(a, b){
+      const x = typeof a.e.at === "number" ? a.e.at : -Infinity, y = typeof b.e.at === "number" ? b.e.at : -Infinity;
+      return x === y ? a.i - b.i : (x < y ? -1 : 1);
+    });
+    return idx.map(function(o){ return o.e; });
+  }
+
+  function readLocal(key){
+    try{ const raw = getStorage().getItem(key); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+  }
+  function ready(){ try{ return !!(auth && auth.readyClient()); }catch(e){ return false; } }
+
+  // ---- one outbox item -> the database. Resolve = done (sent, or nothing valid to send); reject = retry with backoff ----
+  async function sender(item){
+    const r = item && item.route;
+    if(!r || r.kind !== "attempts") return;
+    const c = auth && auth.readyClient();
+    if(!c){ const x = new Error("not ready"); x.code = "ethixo_not_ready"; throw x; }
+    const local = readLocal(item.key);
+    if(local === null) return;                                       // nothing to send (key gone): never invent data
+    const v = validateAttempts(local);
+    if(!v.ok){ warnOnce("skipped-" + v.reason); return; }           // stays local; the next real write re-queues it
+    for(let round = 0; round < 2; round++){
+      const sel = await c.from("attempts").select("id,data")
+        .eq("level", r.level).eq("subject_key", r.subject_key).eq("lesson_id", r.lesson_id).eq("q_idx", r.q_idx).maybeSingle();
+      if(sel.error) throw sel.error;
+      const row = sel.data || null;
+      if(row && !Array.isArray(row.data)){ warnOnce("remote-not-an-array"); return; }
+      const merged = mergeAttempts(row ? row.data : [], local);
+      const mv = validateAttempts(merged);
+      if(!mv.ok){ warnOnce("skipped-merged-" + mv.reason); return; }
+      if(row){
+        if(JSON.stringify(row.data) === JSON.stringify(merged)) return;     // already identical: duplicate flush is a no-op
+        const up = await c.from("attempts").update({ data: merged }).eq("id", row.id).select("id");
+        if(up.error) throw up.error;
+        if(!Array.isArray(up.data) || up.data.length < 1){ const x = new Error("update matched no row"); x.code = "ethixo_update_no_row"; throw x; }
+        return;
+      }
+      const ins = await c.from("attempts").insert({ level:r.level, subject_key:r.subject_key, lesson_id:r.lesson_id, q_idx:r.q_idx, data: merged });
+      if(!ins.error) return;
+      if(String(ins.error.code) !== "23505") throw ins.error;          // 23505 = another tab/lost response inserted it: re-read, then update
+    }
+    const x = new Error("insert kept conflicting"); x.code = "ethixo_insert_conflict"; throw x;
+  }
+
+  // ---- scheduling: one timer, no polling, nothing awaited by the learning code ----
+  function schedule(ms){
+    const delay = typeof ms === "number" ? Math.max(0, ms) : DEBOUNCE_MS;
+    const due = now() + delay;
+    if(timer && timerDue <= due) return;
+    if(timer){ clearTimer(timer); timer = null; }
+    attachListeners();
+    timerDue = due;
+    timer = setTimer(function(){ timer = null; timerDue = 0; flush(); }, delay);
+  }
+  function attachListeners(){
+    if(listenersOn) return;
+    listenersOn = true;
+    function kick(){ if(ready()) schedule(); }
+    try{ addListener("online", kick); addListener("visibilitychange", function(){ if(isVisible()) kick(); }); }catch(e){ /* optional */ }
+  }
+  function flush(){
+    if(busy){ again = true; return current; }
+    busy = true;     // set BEFORE the body runs: a body that finishes without awaiting must still be able to clear it
+    current = (async function(){
+      let summary = { sent:0, failed:0, parked:0, skipped:0 };
+      try{
+        if(!ready()){ lastResult = "waiting-for-auth"; return summary; }     // waiting for sign-in does not burn retry attempts
+        summary = await sync.flush();
+        lastResult = summary.failed ? "retrying" : "ok";
+        if(summary.parked) warnOnce("parked-needs-attention");
+        const pending = sync.outbox().filter(function(it){ return !it.parked; });
+        if(pending.length){
+          const t = now(); let next = Infinity;
+          pending.forEach(function(it){ next = Math.min(next, Math.max(it.nextAt || 0, t)); });
+          schedule(Math.max(1000, next - t));
+        }
+      }catch(e){ lastResult = "error"; }
+      finally{ busy = false; if(again){ again = false; schedule(); } }
+      return summary;
+    })();
+    return current;
+  }
+
+  try{ sync.setSender(sender); }catch(e){ /* optional */ }
+  return { schedule: schedule, flush: flush, status: function(){ return lastResult; },
+           validateAttempts: validateAttempts, mergeAttempts: mergeAttempts, constants: constants() };
+}
+const ETHIXO_ATTEMPTS = createEthixoAttempts({ mode: (DB_ATTEMPTS_SYNC === true ? DB_SYNC_MODE : "off"), sync: ETHIXO_SYNC, auth: ETHIXO_AUTH });
+/* ETHIXO-ATTEMPTS-END */
 
 /* ---------- Storage helpers (browser localStorage — per-device, no account system yet) ---------- */
 function sGet(key){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
