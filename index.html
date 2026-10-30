@@ -761,13 +761,13 @@ let requestSeq = 0;
    stored here. The publishable key is public by design, but it is still supplied separately and only
    for an approved Preview test. DB_SYNC_ALLOWED_HOSTS limits where sync/auth may ever run: when it is
    non-empty, any other hostname (e.g. ethixo.ai, test.ethixo.ai) stays "off" even if the flag is on. */
-const SUPABASE_URL = "__SET_ME__";
-const SUPABASE_PUBLISHABLE_KEY = "__SET_ME__";
+const SUPABASE_URL = "https://nnrvqvhcfzobqjpmxvqe.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_fg_MDhaVFQbEBRJD6xLMYQ_g645YMH-";
 const SUPABASE_LIB_PATH = "assets/vendor/supabase-js-2.117.2.umd.js"; // vendored, loaded only when auth is active
-const DB_SYNC_ALLOWED_HOSTS = [];
+const DB_SYNC_ALLOWED_HOSTS = ["ethixo-app-git-p3-live-test-vijaykumarjeyaraj-7610s-projects.vercel.app"];
 // Phase 3: a SECOND, independent switch for the attempts mirror. false = DB_SYNC_MODE "shadow" stays auth + profile only
 // (exactly the Phase 2 scope). Attempts only sync when this is true AND DB_SYNC_MODE is not "off" AND the host is allow-listed.
-const DB_ATTEMPTS_SYNC = false;
+const DB_ATTEMPTS_SYNC = true;
 /* ETHIXO-CONFIG-END */
 
 /* ETHIXO-SYNC-BEGIN
@@ -777,7 +777,7 @@ const DB_ATTEMPTS_SYNC = false;
    - There is no Supabase URL/key and no loader here yet; sign-in and real syncing are Phase 2+.
    - Local-first: localStorage stays the source of truth. This block only OBSERVES writes.
    - Vault planning is UPSERT-ONLY: nothing in this block can express a remote delete. */
-const DB_SYNC_MODE = "off"; // "off" (safe default) | "shadow" | "on" — leave "off" until explicitly approved
+const DB_SYNC_MODE = "shadow"; // "off" (safe default) | "shadow" | "on" — leave "off" until explicitly approved
 function createEthixoSync(opts){
   opts = opts || {};
   const baseMode = opts.mode === "shadow" || opts.mode === "on" ? opts.mode : "off";
