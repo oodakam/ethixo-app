@@ -36,7 +36,8 @@ const A = (at, score, extra) => Object.assign({ answer:"private answer text " + 
 
 // A stand-in for public.attempts + PostgREST + the grants/RLS that matter here. Records every call.
 function makeDb(){
-  const db = { rows:[], calls:[], script:[], uid:"user-A", n:0, studentIdEverSent:false };
+  const db = { rows:[], calls:[], script:[], uid:"user-A", n:0, studentIdEverSent:false, ver:0 };
+  const stamp = () => "2026-11-09T10:00:" + String(Math.floor(++db.ver / 1000)).padStart(2, "0") + "." + String(db.ver % 1000).padStart(3, "0") + "000+00:00";   // the server sets updated_at (trigger)
   const ALLOWED_INSERT = ["student_id", "level", "subject_key", "lesson_id", "q_idx", "data"];
   const ALLOWED_UPDATE = ["level", "subject_key", "lesson_id", "q_idx", "data"];   // NOT student_id (column grant)
   const take = (op) => { const i = db.script.findIndex(f => f.op === op); return i < 0 ? null : db.script.splice(i, 1)[0]; };
@@ -50,14 +51,14 @@ function makeDb(){
       if(table !== "attempts") return { data:null, error:{ code:"42P01", message:"unexpected table" } };
       if(q.op === "select"){
         const r = db.rows.find(r => r.student_id === db.uid && r.level === q.f.level && r.subject_key === q.f.subject_key && r.lesson_id === q.f.lesson_id && r.q_idx === q.f.q_idx);
-        return { data: r ? { id:r.id, data:JSON.parse(JSON.stringify(r.data)) } : null, error:null };
+        return { data: r ? { id:r.id, data:JSON.parse(JSON.stringify(r.data)), updated_at:r.updated_at } : null, error:null };
       }
       if(q.op === "insert"){
         const keys = Object.keys(q.payload);
         if(keys.some(k => ALLOWED_INSERT.indexOf(k) === -1)) return { data:null, error:{ code:"42501", message:"permission denied (column)" } };
         if("student_id" in q.payload){ db.studentIdEverSent = true; if(q.payload.student_id !== db.uid) return { data:null, error:{ code:"42501", message:"new row violates row-level security policy" } }; }
         if(db.rows.some(r => r.student_id === db.uid && r.level === q.payload.level && r.subject_key === q.payload.subject_key && r.lesson_id === q.payload.lesson_id && r.q_idx === q.payload.q_idx)) return { data:null, error:{ code:"23505", message:"duplicate key" } };
-        db.rows.push({ id:"row-" + (++db.n), student_id:db.uid, level:q.payload.level, subject_key:q.payload.subject_key, lesson_id:q.payload.lesson_id, q_idx:q.payload.q_idx, data:JSON.parse(JSON.stringify(q.payload.data)) });
+        db.rows.push({ id:"row-" + (++db.n), student_id:db.uid, level:q.payload.level, subject_key:q.payload.subject_key, lesson_id:q.payload.lesson_id, q_idx:q.payload.q_idx, data:JSON.parse(JSON.stringify(q.payload.data)), updated_at:stamp() });
         return { data:null, error:null };
       }
       if(q.op === "update"){
@@ -65,7 +66,8 @@ function makeDb(){
         if(keys.some(k => ALLOWED_UPDATE.indexOf(k) === -1)){ if(keys.indexOf("student_id") !== -1) db.studentIdEverSent = true; return { data:null, error:{ code:"42501", message:"permission denied for table attempts" } }; }
         const r = db.rows.find(r => r.id === q.f.id && r.student_id === db.uid);          // RLS: only the owner's rows are visible
         if(!r) return { data:[], error:null };
-        if("data" in q.payload) r.data = JSON.parse(JSON.stringify(q.payload.data));
+        if("updated_at" in q.f && q.f.updated_at !== r.updated_at) return { data:[], error:null };   // compare-and-swap: the row moved since it was read
+        if("data" in q.payload){ r.data = JSON.parse(JSON.stringify(q.payload.data)); r.updated_at = stamp(); }
         return { data:[{ id:r.id }], error:null };
       }
       return { data:null, error:{ message:"unsupported" } };
@@ -237,7 +239,7 @@ console.log("\nTest 7: insert race (23505 - another tab / lost response) -> re-r
   s.db.client.from = function(t){ const b = realFrom(t);
     const mb = b.maybeSingle; b.maybeSingle = function(){ if(hide){ hide = false; s.db.calls.push({ table:t, op:"select", payload:null, filters:{}, returning:null }); return Promise.resolve({ data:null, error:null }); } return mb.apply(b, arguments); };
     return b; };
-  s.db.rows.push({ id:"row-x", student_id:"user-A", level:"P6", subject_key:"SS", lesson_id:"2.1", q_idx:0, data:[A(0.5)] });
+  s.db.rows.push({ id:"row-x", updated_at:"2026-11-09T09:00:00.000000+00:00", student_id:"user-A", level:"P6", subject_key:"SS", lesson_id:"2.1", q_idx:0, data:[A(0.5)] });
   const r = await s.att.flush();
   assert(ops(s.db) === "select,insert,select,update", "select(miss) -> insert(23505) -> select -> update (" + ops(s.db) + ")");
   assert(r.sent === 1 && s.db.rows.length === 1 && s.db.rows[0].data.map(e => e.at).join() === "0.5,1", "the existing remote attempt is kept and the new one added (union)");
@@ -249,7 +251,7 @@ console.log("\nTest 7: insert race (23505 - another tab / lost response) -> re-r
   s.db.client.from = function(t){ const b = realFrom(t); const mb = b.maybeSingle; b.maybeSingle = function(){ n++; return Promise.resolve({ data:null, error:null }); };
     const ins = b.insert; b.insert = function(p){ s.db.calls.push({ table:t, op:"insert", payload:p, filters:{}, returning:null }); return Promise.resolve({ data:null, error:{ code:"23505" } }); }; return b; };
   const r = await s.att.flush();
-  assert(n === 2 && r.failed === 1 && s.sync.outbox().length === 1 && s.sync.outbox()[0].tries === 1, "a conflict that never resolves is bounded to 2 rounds, then handled as an ordinary retry (tries=1)");
+  assert(n === 3 && r.failed === 1 && s.sync.outbox().length === 1 && s.sync.outbox()[0].tries === 1, "a conflict that never resolves is bounded to 3 rounds, then handled as an ordinary retry (tries=1)");
 }
 
 console.log("\nTest 8: offline / server errors -> silent retry with backoff; local data untouched");
@@ -318,7 +320,7 @@ console.log("\nTest 11: malformed or oversized local data is never uploaded and 
   const s4 = setup(); s4.write(KEY, [A(1)]); s4.st.data[KEY] = "{not json"; await s4.att.flush();
   assert(s4.db.calls.length === 0, "unparseable local value: nothing sent");
   const s5 = setup(); s5.write(KEY, [A(1)]);
-  s5.db.rows.push({ id:"r", student_id:"user-A", level:"P6", subject_key:"SS", lesson_id:"2.1", q_idx:0, data:[A(1)] });
+  s5.db.rows.push({ id:"r", updated_at:"2026-11-09T09:00:00.000000+00:00", student_id:"user-A", level:"P6", subject_key:"SS", lesson_id:"2.1", q_idx:0, data:[A(1)] });
   s5.db.rows[0].data = "garbage";   // remote not an array (the table forbids it; defence in depth)
   await s5.att.flush();
   assert(!s5.db.calls.some(c => c.op === "update" || c.op === "insert") && s5.warns.some(w => /remote-not-an-array/.test(w)), "remote row that is not an array: never overwritten");
@@ -338,7 +340,7 @@ console.log("\nTest 12: an UPDATE that matches no row (RLS hides it) is a failur
 console.log("\nTest 13: attempts made elsewhere (same identity, other device/tab) are kept; local is never overwritten");
 {
   const s = setup();
-  s.db.rows.push({ id:"row-r", student_id:"user-A", level:"P6", subject_key:"SS", lesson_id:"2.1", q_idx:0, data:[A(5), A(6)] });
+  s.db.rows.push({ id:"row-r", updated_at:"2026-11-09T09:00:00.000000+00:00", student_id:"user-A", level:"P6", subject_key:"SS", lesson_id:"2.1", q_idx:0, data:[A(5), A(6)] });
   const local = [A(7)];
   s.write(KEY, local);
   const localBefore = s.st.data[KEY];

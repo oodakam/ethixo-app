@@ -109,6 +109,34 @@ try{
   assert(rf.stdout.indexOf(id) !== -1, "the loser's recovery (re-read, then UPDATE by id) matches exactly one row");
   const fin = psql("p3", ["-At", "-F", "|", "-c", "select count(*), max(jsonb_array_length(data)) from public.attempts where lesson_id='race'"]).stdout.trim();
   assert(fin === "1|2", "final state: one row holding both writers' attempts (" + fin + ")");
+
+  console.log("\nSuite 5 (Phase 4a): compare-and-swap UPDATE (update ... where id and updated_at, returning id) with two independent connections");
+  const CAS = "cas";
+  const one = (script) => psql("p3", ["-At", "-F", "|", "-q"], { input: script });                    // each call = its own connection and its own transaction
+  const asS3 = (sql) => "begin;\n" + claims(S3) + sql + "\ncommit;\n";
+  const e1 = '[{"score":1,"usedThinking":false,"at":10}]';
+  one(asS3("insert into public.attempts(level,subject_key,lesson_id,q_idx,data) values ('P6','EN','" + CAS + "',0,'" + e1 + "');"));
+  const readRow = () => one(asS3("select id, updated_at, data::text from public.attempts where lesson_id='" + CAS + "' and q_idx=0 and level='P6' and subject_key='EN';")).stdout.split("\n").filter(l => /^[0-9a-f-]{36}\|/.test(l))[0].split("|");
+  const readA = readRow(), readB = readRow();     // two readers obtain the same version
+  assert(readA[1] === readB[1] && readA[1].length > 10, "two independent readers obtain the same updated_at (" + readA[1] + ")");
+  const rid = readA[0], oldV = readA[1];
+  const cas = (v, data) => asS3("update public.attempts set data = '" + data + "' where id = '" + rid + "' and updated_at = '" + v + "' returning id;");
+  const dataA = '[{"score":1,"usedThinking":false,"at":10},{"score":2,"usedThinking":true,"at":20}]';
+  const casA = one(cas(oldV, dataA));
+  assert(casA.stdout.indexOf(rid) !== -1, "writer A's conditional update on the version it read affects exactly 1 row");
+  const afterA = readRow();
+  assert(afterA[1] !== oldV, "the database bumped updated_at after A's write (the version really changed)");
+  const dataB = '[{"score":1,"usedThinking":false,"at":10},{"score":3,"usedThinking":false,"at":30}]';
+  const casB = one(cas(oldV, dataB));
+  assert(casB.stdout.indexOf(rid) === -1 && /UPDATE 0|^$/m.test(casB.stdout + "\n") && readRow()[2] === afterA[2], "writer B's stale update (old updated_at) affects 0 rows and changes nothing");
+  const cur = JSON.parse(readRow()[2]); const merged = cur.concat([{ score:3, usedThinking:false, at:30 }]);
+  const casB2 = one(cas(readRow()[1], JSON.stringify(merged)));
+  assert(casB2.stdout.indexOf(rid) !== -1, "writer B re-reads, merges and its update on the NEW updated_at affects 1 row");
+  const fin5 = readRow(); const fd = JSON.parse(fin5[2]);
+  assert(JSON.stringify(fd.map(x => x.at)) === "[10,20,30]" && fd[1].usedThinking === true, "final row holds both writers' attempts (at 10, 20, 30)");
+  assert(fd.every(x => Object.keys(x).sort().join() === "at,score,usedThinking") && !/answer|strengths|nextSteps/.test(fin5[2]), "final row has only at / score / usedThinking: no answer, strengths or nextSteps");
+  const ghost = one(asS3("update public.attempts set data = '[]' where id = '" + rid + "' and updated_at = '2000-01-01T00:00:00+00' returning id;"));
+  assert(ghost.stdout.indexOf(rid) === -1 && JSON.parse(readRow()[2]).length === 3, "an update with a wrong version never matches (data still 3 attempts)");
 }catch(e){
   failed++; console.log("  FAIL: harness error: " + e.message);
 }

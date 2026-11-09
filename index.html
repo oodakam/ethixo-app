@@ -768,6 +768,9 @@ const DB_SYNC_ALLOWED_HOSTS = [];
 // Phase 3: a SECOND, independent switch for the attempts mirror. false = DB_SYNC_MODE "shadow" stays auth + profile only
 // (exactly the Phase 2 scope). Attempts only sync when this is true AND DB_SYNC_MODE is not "off" AND the host is allow-listed.
 const DB_ATTEMPTS_SYNC = false;
+// Phase 4a: one-time upload of the attempt history already stored on this device (minimal fields only). Needs DB_SYNC_MODE not "off", an
+// allow-listed host AND DB_ATTEMPTS_SYNC === true as well. Consent is collected outside the app (pilot gate); the allow-listed pilot host is the opt-in.
+const DB_BACKFILL = false;
 /* ETHIXO-CONFIG-END */
 
 /* ETHIXO-SYNC-BEGIN
@@ -1180,7 +1183,7 @@ const ETHIXO_AUTH = createEthixoAuth({
   mode: DB_SYNC_MODE, sync: ETHIXO_SYNC,
   allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" ? DB_SYNC_ALLOWED_HOSTS : []),
   config: { url: SUPABASE_URL, key: SUPABASE_PUBLISHABLE_KEY, libPath: SUPABASE_LIB_PATH },
-  onProfileOk: function(){ try{ ETHIXO_ATTEMPTS.schedule(); }catch(_e){ /* never affects sign-in */ } },
+  onProfileOk: function(){ try{ ETHIXO_ATTEMPTS.schedule(); }catch(_e){ /* never affects sign-in */ } try{ ETHIXO_BACKFILL.start(); }catch(_e){ /* never affects sign-in */ } },
 });
 /* ETHIXO-AUTH-END */
 
@@ -1196,16 +1199,21 @@ const ETHIXO_AUTH = createEthixoAuth({
      is the real enforcement; this code just never tries to name an owner.
    - Writes use select -> insert/update, not upsert: the table grants forbid updating student_id, which an upsert would try.
    - Conflict rule (Integration Plan): attempt history is append-only; the uploaded array is the UNION of remote and local
-     attempts by their "at" timestamp, so a remote attempt is never dropped. Local is never modified. */
+     attempts by their "at" timestamp, so a remote attempt is never dropped. Local is never modified.
+   - Minimal data (Phase 4a, D3): only { score, usedThinking, at } is ever uploaded. The student's written answer, the strengths and the
+     next-steps text never leave the device. Existing remote rows are re-written in the same minimal form the next time they sync.
+   - Compare-and-swap (Phase 4a, D1): an update is conditional on the row's updated_at as read; if another writer got there first
+     the row is re-read and merged again instead of overwriting their attempts. */
 function createEthixoAttempts(opts){
   opts = opts || {};
   const baseMode = opts.mode === "shadow" || opts.mode === "on" ? opts.mode : "off";
   if(baseMode === "off"){
     const none = { sent:0, failed:0, parked:0, skipped:0 };
     return { schedule: function(){}, flush: function(){ return Promise.resolve(none); }, status: function(){ return "off"; },
-             validateAttempts: validateAttempts, mergeAttempts: mergeAttempts, constants: constants() };
+             validateAttempts: validateAttempts, mergeAttempts: mergeAttempts, minimizeAttempts: minimizeAttempts, constants: constants() };
   }
   const sync = opts.sync, auth = opts.auth;
+  const onFlushed = typeof opts.onFlushed === "function" ? opts.onFlushed : null;
   const getStorage = opts.getStorage || function(){ return localStorage; };
   const now = opts.now || function(){ return Date.now(); };
   const setTimer = opts.setTimer || function(f, ms){ return setTimeout(f, ms); };
@@ -1253,6 +1261,34 @@ function createEthixoAttempts(opts){
     return idx.map(function(o){ return o.e; });
   }
 
+  // D3: the ONLY fields that leave the device. A legacy element without a numeric score may carry scoreLow/scoreHigh (same fallback
+  // the app's own attemptScore() uses). Elements without a numeric "at" cannot be de-duplicated or summarised and are skipped.
+  function minimizeAttempts(arr){
+    const out = []; let skipped = 0;
+    (Array.isArray(arr) ? arr : []).forEach(function(e){
+      if(!e || typeof e !== "object" || Array.isArray(e)){ skipped++; return; }
+      let score = null;
+      if(typeof e.score === "number" && isFinite(e.score)) score = e.score;
+      else if(typeof e.scoreLow === "number" || typeof e.scoreHigh === "number"){
+        const lo = typeof e.scoreLow === "number" ? e.scoreLow : 0, hi = typeof e.scoreHigh === "number" ? e.scoreHigh : 0;
+        const m = Math.round((lo + hi) / 2); if(isFinite(m)) score = m;
+      }
+      if(score === null || typeof e.at !== "number" || !isFinite(e.at)){ skipped++; return; }
+      out.push({ score:score, usedThinking:e.usedThinking === true, at:e.at });
+    });
+    return { out:out, skipped:skipped };
+  }
+  // True only when the remote array is ALREADY exactly the minimal, canonical form of `merged` (no extra fields such as legacy answer text).
+  function sameAsRemote(rawRemote, merged){
+    if(!Array.isArray(rawRemote) || rawRemote.length !== merged.length) return false;
+    for(let i = 0; i < merged.length; i++){
+      const e = rawRemote[i];
+      if(!e || typeof e !== "object" || Object.keys(e).sort().join() !== "at,score,usedThinking") return false;
+      if(e.score !== merged[i].score || e.usedThinking !== merged[i].usedThinking || e.at !== merged[i].at) return false;
+    }
+    return true;
+  }
+
   function readLocal(key){
     try{ const raw = getStorage().getItem(key); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
   }
@@ -1268,27 +1304,33 @@ function createEthixoAttempts(opts){
     if(local === null) return;                                       // nothing to send (key gone): never invent data
     const v = validateAttempts(local);
     if(!v.ok){ warnOnce("skipped-" + v.reason); return; }           // stays local; the next real write re-queues it
-    for(let round = 0; round < 2; round++){
-      const sel = await c.from("attempts").select("id,data")
+    const mine = minimizeAttempts(local).out;
+    if(!mine.length){ warnOnce("skipped-nothing-uploadable"); return; }   // nothing with a numeric score and time: stays local
+    let lastReason = "ethixo_insert_conflict";
+    for(let round = 0; round < 3; round++){
+      const sel = await c.from("attempts").select("id,data,updated_at")
         .eq("level", r.level).eq("subject_key", r.subject_key).eq("lesson_id", r.lesson_id).eq("q_idx", r.q_idx).maybeSingle();
       if(sel.error) throw sel.error;
       const row = sel.data || null;
       if(row && !Array.isArray(row.data)){ warnOnce("remote-not-an-array"); return; }
-      const merged = mergeAttempts(row ? row.data : [], local);
+      const merged = mergeAttempts(minimizeAttempts(row ? row.data : []).out, mine);
       const mv = validateAttempts(merged);
       if(!mv.ok){ warnOnce("skipped-merged-" + mv.reason); return; }
       if(row){
-        if(JSON.stringify(row.data) === JSON.stringify(merged)) return;     // already identical: duplicate flush is a no-op
-        const up = await c.from("attempts").update({ data: merged }).eq("id", row.id).select("id");
+        if(sameAsRemote(row.data, merged)) return;                           // already identical and already minimal: duplicate flush is a no-op
+        if(typeof row.updated_at !== "string" || !row.updated_at){ const x = new Error("row version missing"); x.code = "ethixo_no_version"; throw x; }
+        // compare-and-swap: only succeeds if nobody changed the row since we read it
+        const up = await c.from("attempts").update({ data: merged }).eq("id", row.id).eq("updated_at", row.updated_at).select("id");
         if(up.error) throw up.error;
-        if(!Array.isArray(up.data) || up.data.length < 1){ const x = new Error("update matched no row"); x.code = "ethixo_update_no_row"; throw x; }
-        return;
+        if(Array.isArray(up.data) && up.data.length >= 1) return;
+        lastReason = "ethixo_update_no_row"; continue;                      // changed under us (or hidden by RLS): re-read and merge again
       }
       const ins = await c.from("attempts").insert({ level:r.level, subject_key:r.subject_key, lesson_id:r.lesson_id, q_idx:r.q_idx, data: merged });
       if(!ins.error) return;
       if(String(ins.error.code) !== "23505") throw ins.error;          // 23505 = another tab/lost response inserted it: re-read, then update
+      lastReason = "ethixo_insert_conflict";
     }
-    const x = new Error("insert kept conflicting"); x.code = "ethixo_insert_conflict"; throw x;
+    const x = new Error("write kept conflicting"); x.code = lastReason; throw x;
   }
 
   // ---- scheduling: one timer, no polling, nothing awaited by the learning code ----
@@ -1322,7 +1364,7 @@ function createEthixoAttempts(opts){
           const t = now(); let next = Infinity;
           pending.forEach(function(it){ next = Math.min(next, Math.max(it.nextAt || 0, t)); });
           schedule(Math.max(1000, next - t));
-        }
+        }else if(onFlushed){ try{ onFlushed(summary); }catch(_e){ /* a notifier can never affect the app */ } }
       }catch(e){ lastResult = "error"; }
       finally{ busy = false; if(again){ again = false; schedule(); } }
       return summary;
@@ -1332,10 +1374,106 @@ function createEthixoAttempts(opts){
 
   try{ sync.setSender(sender); }catch(e){ /* optional */ }
   return { schedule: schedule, flush: flush, status: function(){ return lastResult; },
-           validateAttempts: validateAttempts, mergeAttempts: mergeAttempts, constants: constants() };
+           validateAttempts: validateAttempts, mergeAttempts: mergeAttempts, minimizeAttempts: minimizeAttempts, constants: constants() };
 }
-const ETHIXO_ATTEMPTS = createEthixoAttempts({ mode: (DB_ATTEMPTS_SYNC === true ? DB_SYNC_MODE : "off"), sync: ETHIXO_SYNC, auth: ETHIXO_AUTH });
+const ETHIXO_ATTEMPTS = createEthixoAttempts({ mode: (DB_ATTEMPTS_SYNC === true ? DB_SYNC_MODE : "off"), sync: ETHIXO_SYNC, auth: ETHIXO_AUTH, onFlushed: function(){ try{ ETHIXO_BACKFILL.next(); }catch(_e){ /* never affects the app */ } } });
 /* ETHIXO-ATTEMPTS-END */
+
+/* ETHIXO-BACKFILL-BEGIN
+   Phase 4a: one-time upload of the attempt history that already exists on THIS device, through the same sender as live sync
+   (minimal fields only, compare-and-swap, never modifies local data).
+   INERT by design: unless DB_BACKFILL, DB_ATTEMPTS_SYNC and DB_SYNC_MODE are all on (and the host is allow-listed) this block does nothing:
+   no storage is read, no timer exists, nothing is handed to the outbox.
+   Consent is collected OUTSIDE the app (pilot gate); the allow-listed pilot host is the opt-in. There is deliberately no screen here.
+   How it works: after sign-in it scans the attempts:* keys once, keeps the ones that hold uploadable data, and hands them to the outbox
+   20 at a time, only when the outbox has drained and at least 1.5 s apart (the outbox itself holds at most 500 items).
+   Progress lives in one key, "ethixoBackfill", so a reload resumes; "done" is final for the device. Handing a key over twice is harmless. */
+function createEthixoBackfill(opts){
+  opts = opts || {};
+  const baseMode = opts.mode === "shadow" || opts.mode === "on" ? opts.mode : "off";
+  const STATE_KEY = "ethixoBackfill", CHUNK = 20, GAP_MS = 1500, MAX_KEYS = 2000;
+  function constants(){ return { STATE_KEY:STATE_KEY, CHUNK:CHUNK, GAP_MS:GAP_MS, MAX_KEYS:MAX_KEYS }; }
+  if(baseMode === "off"){
+    return { start: function(){}, next: function(){}, status: function(){ return "off"; }, constants: constants() };
+  }
+  const sync = opts.sync, attempts = opts.attempts, auth = opts.auth;
+  const getStorage = opts.getStorage || function(){ return localStorage; };
+  const now = opts.now || function(){ return Date.now(); };
+  const setTimer = opts.setTimer || function(f, ms){ return setTimeout(f, ms); };
+  const warnFn = opts.warn || function(m){ try{ console.warn(m); }catch(e){} };
+  let timer = null, started = false, lastStatus = "idle";
+  const warned = {};
+  function warnOnce(tag){ if(warned[tag]) return; warned[tag] = true; warnFn("Ethixo backfill: " + tag); }   // tags only, never keys or answers
+
+  function readState(){
+    try{
+      const raw = getStorage().getItem(STATE_KEY); if(!raw) return null;
+      const o = JSON.parse(raw);
+      if(!o || o.v !== 1 || (o.state !== "running" && o.state !== "done") || !Array.isArray(o.pending)) return null;
+      return o;
+    }catch(e){ return null; }
+  }
+  function writeState(o){ try{ getStorage().setItem(STATE_KEY, JSON.stringify(o)); return true; }catch(e){ return false; } }
+  function ready(){ try{ return !!(auth && auth.readyClient()); }catch(e){ return false; } }
+
+  // Which local keys hold something worth uploading? Read-only.
+  function scan(){
+    const st = getStorage(), keys = [];
+    let n = 0; try{ n = st.length; }catch(e){ return keys; }
+    for(let i = 0; i < n; i++){
+      let k; try{ k = st.key(i); }catch(e){ continue; }
+      if(typeof k !== "string" || k.indexOf("attempts:") !== 0) continue;
+      if(sync.route(k).kind !== "attempts") continue;
+      let v; try{ v = JSON.parse(st.getItem(k)); }catch(e){ continue; }
+      if(!attempts.validateAttempts(v).ok || !attempts.minimizeAttempts(v).out.length) continue;
+      keys.push(k);
+    }
+    keys.sort();
+    if(keys.length > MAX_KEYS){ warnOnce("too-many-keys-truncated"); keys.length = MAX_KEYS; }
+    return keys;
+  }
+
+  function schedule(ms){
+    if(timer) return;
+    timer = setTimer(function(){ timer = null; step(); }, typeof ms === "number" ? ms : GAP_MS);
+  }
+  function step(){
+    try{
+      if(!ready() || sync.mode() === "off"){ lastStatus = "waiting"; return; }          // wait for sign-in / kill switch lifted; a later trigger resumes
+      const s = readState(); if(!s){ return; }
+      if(s.state === "done"){ lastStatus = "done"; return; }
+      const queued = sync.outbox().filter(function(it){ return !it.parked; }).length;
+      if(queued > 0){ lastStatus = "running"; return; }                                  // the outbox is busy; onFlushed -> next() resumes
+      if(!s.pending.length){ s.state = "done"; s.finishedAt = now(); writeState(s); lastStatus = "done"; return; }
+      const chunk = s.pending.slice(0, CHUNK);
+      chunk.forEach(function(k){ try{ sync.onWrite(k, null); }catch(e){ /* never affects the app */ } });
+      s.pending = s.pending.slice(chunk.length); s.done = (s.done || 0) + chunk.length;
+      writeState(s); lastStatus = "running";
+      // the hand-over triggers the attempts flush; when it drains, onFlushed calls next()
+    }catch(e){ lastStatus = "error"; }
+  }
+
+  function start(){
+    try{
+      if(started) return; started = true;
+      let s = readState();
+      if(s && s.state === "done"){ lastStatus = "done"; return; }
+      if(!s){
+        const keys = scan();
+        s = { v:1, state:"running", total:keys.length, done:0, pending:keys, startedAt:now() };
+        if(!writeState(s)){ warnOnce("state-not-saved"); return; }                      // never run without being able to remember progress
+      }
+      lastStatus = "running"; schedule(GAP_MS);
+    }catch(e){ lastStatus = "error"; }
+  }
+  function next(){ try{ const s = readState(); if(s && s.state === "running") schedule(GAP_MS); }catch(e){} }
+
+  return { start: start, next: next, status: function(){ return lastStatus; }, constants: constants() };
+}
+const ETHIXO_BACKFILL = createEthixoBackfill({
+  mode: ((typeof DB_BACKFILL !== "undefined" && DB_BACKFILL === true && DB_ATTEMPTS_SYNC === true) ? DB_SYNC_MODE : "off"),
+  sync: ETHIXO_SYNC, attempts: ETHIXO_ATTEMPTS, auth: ETHIXO_AUTH });
+/* ETHIXO-BACKFILL-END */
 
 /* ---------- Storage helpers (browser localStorage — per-device, no account system yet) ---------- */
 function sGet(key){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }catch(e){ return null; } }

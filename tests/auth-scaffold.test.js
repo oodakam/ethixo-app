@@ -431,6 +431,7 @@ console.log("\nTest 17: existing functions are untouched; exactly three guarded 
   // Phase 3 (Attempts Sync) additions are reversed first, each one an exact, named edit; what is left must be Phase 2's strip.
   const stripPhase3 = (s) => s
     .replace(/\n\/\* ETHIXO-ATTEMPTS-BEGIN[\s\S]*?ETHIXO-ATTEMPTS-END \*\/\n/, "")
+    .replace(/\n\/\* ETHIXO-BACKFILL-BEGIN[\s\S]*?ETHIXO-BACKFILL-END \*\/\n/, "")
     .replace(/  \/\/ Phase 3 options[\s\S]*?  let sender = null, seqCounter = 0;\n/, "  let sender = null;\n")
     .replace("    if(kinds && kinds.indexOf(r.kind) === -1) return;\n", "")
     .replace("value:(omitValues ? null : val), queuedAt:now(), seq:++seqCounter,", "value:val, queuedAt:now(),")
@@ -443,7 +444,7 @@ console.log("\nTest 17: existing functions are untouched; exactly three guarded 
     .replace(/  \/\/ Host allow-list\.[\s\S]*?  const getHost = [^\n]*\n/, "")
     .replace(/    if\(requireAllowList \|\| listProvided\)\{[^\n]*\n/, "")
     .replace(", requireAllowList: true, allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== \"undefined\" ? DB_SYNC_ALLOWED_HOSTS : [])", "");
-  assert(strip(html) === orig, "removing the approved Phase 2 and Phase 3 additions restores the Phase 0+1 index.html exactly (nothing else changed)");
+  assert(strip(html) === orig, "removing the approved Phase 2, Phase 3 and Phase 4a additions restores the Phase 0+1 index.html exactly (nothing else changed)");
 }
 
 console.log("\nTest 18: host allow-list FAILS CLOSED (empty / missing / malformed list => off; only an explicitly listed host works)");

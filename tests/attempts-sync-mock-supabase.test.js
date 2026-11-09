@@ -26,6 +26,7 @@ function build(opts){
     ['const DB_SYNC_ALLOWED_HOSTS = [];\n', 'const DB_SYNC_ALLOWED_HOSTS = ' + JSON.stringify(opts.hosts || ["127.0.0.1"]) + ';\n'],
   ];
   if(opts.attempts) rep.push(["const DB_ATTEMPTS_SYNC = false;", "const DB_ATTEMPTS_SYNC = true;"]);
+  if(opts.backfill) rep.push(["const DB_BACKFILL = false;", "const DB_BACKFILL = true;"]);
   let h = committed;
   rep.forEach(([a, b]) => { if(h.split(a).length !== 2) throw new Error("test build: marker not found exactly once: " + a); h = h.replace(a, b); });
   return h;
@@ -43,7 +44,8 @@ function serve(dir){
 // ---------- the mock Supabase (auth + profiles + a PostgREST stand-in for attempts) ----------
 function b64u(o){ return Buffer.from(typeof o === "string" ? o : JSON.stringify(o)).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_"); }
 function makeMock(){
-  const m = { mode:"ok", log:[], users:0, profiles:{}, tokens:{}, attempts:[], seq:0, studentIdSeen:false, otherTables:[], postDelay:0, conflicts:0, posts:0 };
+  const m = { mode:"ok", log:[], users:0, profiles:{}, tokens:{}, attempts:[], seq:0, studentIdSeen:false, otherTables:[], postDelay:0, conflicts:0, posts:0, ver:0, patchesSeen:null };
+  m.stamp = () => "2026-11-09T10:00:00." + String(++m.ver).padStart(6, "0") + "+00:00";
   m.reset = () => { m.mode = "ok"; m.log = []; m.studentIdSeen = false; m.otherTables = []; m.postDelay = 0; m.conflicts = 0; m.posts = 0; };
   m.handler = async function(route){
     const req = route.request(), url = new URL(req.url()), method = req.method();
@@ -84,7 +86,7 @@ function makeMock(){
         const rows = mine.filter(r => (!url.searchParams.get("level") || r.level === q("level")) && (!url.searchParams.get("subject_key") || r.subject_key === q("subject_key"))
           && (!url.searchParams.get("lesson_id") || r.lesson_id === q("lesson_id")) && (!url.searchParams.get("q_idx") || String(r.q_idx) === q("q_idx")));
         const single = /vnd\.pgrst\.object/.test(h["accept"] || "");
-        const shape = (r) => ({ id:r.id, data:r.data });
+        const shape = (r) => ({ id:r.id, data:r.data, updated_at:r.updated_at });
         if(single) return rows.length ? json(200, shape(rows[0])) : json(406, { code:"PGRST116", message:"The result contains 0 rows" });
         return json(200, rows.map(shape));
       }
@@ -93,14 +95,17 @@ function makeMock(){
         m.posts++;
         if(body && "student_id" in body){ m.studentIdSeen = true; if(body.student_id !== uid) return json(403, { code:"42501", message:"new row violates row-level security policy" }); }
         if(m.attempts.some(r => r.student_id === uid && r.level === body.level && r.subject_key === body.subject_key && r.lesson_id === body.lesson_id && r.q_idx === body.q_idx)) { m.conflicts++; return json(409, { code:"23505", message:"duplicate key" }); }
-        m.attempts.push({ id:"att-" + (++m.seq), student_id:uid, level:body.level, subject_key:body.subject_key, lesson_id:body.lesson_id, q_idx:body.q_idx, data:body.data });   // owner = token, never the client
+        m.attempts.push({ id:"att-" + (++m.seq), student_id:uid, level:body.level, subject_key:body.subject_key, lesson_id:body.lesson_id, q_idx:body.q_idx, data:body.data, updated_at:m.stamp() });   // owner = token, never the client
         return route.fulfill({ status:201, headers:cors });
       }
       if(method === "PATCH"){
         if(body && "student_id" in body){ m.studentIdSeen = true; return json(403, { code:"42501", message:"permission denied for table attempts" }); }
         const r = mine.find(r => r.id === q("id"));
-        if(r && body && "data" in body) r.data = body.data;
-        return /return=representation/.test(entry.prefer) ? json(200, r ? [{ id:r.id }] : []) : route.fulfill({ status:204, headers:cors });
+        const want = url.searchParams.get("updated_at");          // compare-and-swap: PATCH ... ?id=eq.X&updated_at=eq.<value read>
+        const hit = r && (!want || want.replace(/^eq\./, "") === r.updated_at);
+        if(hit && body && "data" in body){ r.data = body.data; r.updated_at = m.stamp(); }
+        if(m.patchesSeen) m.patchesSeen.push({ cas:!!want, hit:!!hit });
+        return /return=representation/.test(entry.prefer) ? json(200, hit ? [{ id:r.id }] : []) : route.fulfill({ status:204, headers:cors });
       }
     }
     if(/\/rest\/v1\/(vault_entries|student_state|class_members|classes|assignments)/.test(url.pathname)){ m.otherTables.push(url.pathname); return json(200, []); }
@@ -137,6 +142,7 @@ const screen = (page) => page.evaluate(() => document.getElementById("app").inne
 const dumpLS = (page) => page.evaluate(() => { const o = {}; const P = Object.getPrototypeOf(localStorage); for(let i = 0; i < localStorage.length; i++){ const k = P.key.call(localStorage, i); o[k] = P.getItem.call(localStorage, k); } return o; });
 const reqs = (mock) => mock.log.filter(e => e.method !== "OPTIONS");
 const attReqs = (mock) => reqs(mock).filter(e => /\/rest\/v1\/attempts/.test(e.path));
+const M = (at, score) => ({ score:score == null ? 1 : score, usedThinking:false, at:at });   // what the cloud may hold
 const A = (at, score) => ({ answer:"fake practice answer " + at, score:score == null ? 1 : score, strengths:[], nextSteps:[], usedThinking:false, at:at });
 const K0 = "attempts:P6:SS:2.1:0", K1 = "attempts:P6:SS:2.1:1";
 
@@ -145,6 +151,7 @@ const K0 = "attempts:P6:SS:2.1:0", K1 = "attempts:P6:SS:2.1:1";
   const mkSite = (name, html) => { const d = path.join(tmp, name); fs.mkdirSync(path.join(d, "assets", "vendor"), { recursive:true }); fs.writeFileSync(path.join(d, "index.html"), html);
     fs.copyFileSync(path.join(repo, "assets", "vendor", "supabase-js-2.117.2.umd.js"), path.join(d, "assets", "vendor", "supabase-js-2.117.2.umd.js")); return d; };
   const ON = await serve(mkSite("on", build({ attempts:true })));
+  const BF = await serve(mkSite("bf", build({ attempts:true, backfill:true })));
   const AUTHONLY = await serve(mkSite("authonly", build({ attempts:false })));
   const WRONG = await serve(mkSite("wrong", build({ attempts:true, hosts:["ethixo-preview.example.test"] })));
   const ORIG = await serve(mkSite("orig", execFileSync("git", ["-C", repo, "show", "d0ebdf0:index.html"], { maxBuffer: 1 << 26 }).toString()));
@@ -215,7 +222,7 @@ const K0 = "attempts:P6:SS:2.1:0", K1 = "attempts:P6:SS:2.1:1";
     assert(!reqs(mock).some(e => /student_id/.test(e.query)), "student_id is not in any query string either");
     const row = mock.attempts[0];
     assert(row.student_id === "00000000-0000-4000-8000-000000000001" && row.level === "P6" && row.subject_key === "SS" && row.lesson_id === "2.1" && row.q_idx === 0, "the owner on the row is the signed-in user (assigned from the token by the server side)");
-    assert(JSON.stringify(row.data) === JSON.stringify([A(1)]), "the remote data equals the local array exactly");
+    assert(JSON.stringify(row.data) === JSON.stringify([M(1)]) && !JSON.stringify(reqs(mock)).includes("fake practice answer"), "D3: the remote data is only { score, usedThinking, at } and no answer text is in any request");
     assert(mock.otherTables.length === 0, "no request to vault_entries / student_state / class_members / classes / assignments");
     const ls = await dumpLS(page4);
     assert(JSON.parse(ls[K0]).length === 1 && JSON.stringify(JSON.parse(ls.ethixoOutbox || "[]")) === "[]", "local value intact; the outbox is empty again after the send");
@@ -230,7 +237,7 @@ const K0 = "attempts:P6:SS:2.1:0", K1 = "attempts:P6:SS:2.1:1";
     const seq = reqs(mock).map(e => e.method + " " + e.path).join(" | ");
     assert(seq === "GET /rest/v1/attempts | PATCH /rest/v1/attempts", "request sequence: GET then PATCH (" + seq + ")");
     const patch = reqs(mock).find(e => e.method === "PATCH");
-    assert(Object.keys(patch.body).join() === "data" && /id=eq\.att-1/.test(patch.query) && /return=representation/.test(patch.prefer), "PATCH body is exactly { data }, addressed by row id, asking for the id back");
+    assert(Object.keys(patch.body).join() === "data" && /id=eq\.att-1/.test(patch.query) && /updated_at=eq\./.test(patch.query) && /return=representation/.test(patch.prefer), "D1: PATCH body is exactly { data }, addressed by row id AND the updated_at that was read, asking for the id back");
     assert(mock.studentIdSeen === false && mock.attempts.length === 1, "student_id never sent; still exactly one row");
     // an identical re-write (double click) sends only the look-up
     mock.log = [];
@@ -383,8 +390,48 @@ const K0 = "attempts:P6:SS:2.1:0", K1 = "attempts:P6:SS:2.1:1";
     await c.ctx.close();
   }
 
+  console.log("\nTest 14 (Phase 4a): one-time backfill of existing local answers - minimal data only, resumes after reload, runs once");
+  {
+    const seed = {}; for(let i = 0; i < 25; i++) seed["attempts:P6:SS:B" + i + ":0"] = [A(10 + i, 2)];
+    seed.vault = [{ qid:"x", answer:"fake vault answer" }];
+    // (a) backfill switch OFF on the attempts-ON build: existing data is NOT uploaded
+    mock.reset(); mock.attempts = []; mock.users = 0; mock.profiles = {}; mock.tokens = {};
+    const off = await newCtx(browser, mock, ON.port, seed); const po = await open(off.ctx, ON.port);
+    await goStudent(po.page); await waitFor(async () => await status(po.page) === "profile-ok"); await po.page.waitForTimeout(4000);
+    assert(mock.attempts.length === 0 && !("ethixoBackfill" in await dumpLS(po.page)), "DB_BACKFILL off: old local attempts are not uploaded and no backfill state key exists");
+    await off.ctx.close();
+    // (b) backfill ON
+    mock.reset(); mock.attempts = []; mock.users = 0; mock.profiles = {}; mock.tokens = {};
+    const c = await newCtx(browser, mock, BF.port, seed); const t = await open(c.ctx, BF.port);
+    const before = await dumpLS(t.page);
+    await goStudent(t.page); await waitFor(async () => await status(t.page) === "profile-ok");
+    const first = await waitFor(async () => mock.attempts.length >= 1, 12000);
+    assert(first, "after sign-in the backfill starts uploading existing questions");
+    const done = await waitFor(async () => mock.attempts.length === 25 && JSON.parse((await dumpLS(t.page)).ethixoBackfill || "{}").state === "done", 90000);
+    assert(done && mock.attempts.length === 25, "all 25 existing questions reached the table and the state is done (" + mock.attempts.length + ")");
+    assert(mock.attempts.every(r => r.data.length === 1 && Object.keys(r.data[0]).sort().join() === "at,score,usedThinking"), "every uploaded row holds only { at, score, usedThinking }");
+    assert(!JSON.stringify(reqs(mock)).includes("fake practice answer") && !JSON.stringify(reqs(mock)).includes("fake vault answer"), "no answer text and no vault data in any request");
+    assert(mock.otherTables.length === 0 && mock.studentIdSeen === false, "no other table touched; student_id never sent");
+    const after = await dumpLS(t.page);
+    assert(Object.keys(seed).every(k => k.indexOf("attempts:") !== 0 || after[k] === before[k]) && after.vault === before.vault, "local attempts and vault are byte-for-byte unchanged");
+    assert(JSON.parse(after.ethixoOutbox || "[]").length === 0 && t.errors.length === 0, "outbox empty, no JavaScript errors");
+    // reload: done is final, nothing is sent again
+    mock.log = []; await t.page.reload({ waitUntil:"load" }); await t.page.waitForTimeout(500); await goStudent(t.page); await waitFor(async () => await status(t.page) === "profile-ok"); await t.page.waitForTimeout(4500);
+    assert(attReqs(mock).length === 0, "after a reload the finished backfill sends nothing");
+    await c.ctx.close();
+    // (c) interrupted: only part uploaded, then reload resumes
+    mock.reset(); mock.attempts = []; mock.users = 0; mock.profiles = {}; mock.tokens = {};
+    const c2 = await newCtx(browser, mock, BF.port, seed); const t2 = await open(c2.ctx, BF.port);
+    await goStudent(t2.page); await waitFor(async () => await status(t2.page) === "profile-ok");
+    await waitFor(async () => mock.attempts.length >= 5, 20000);
+    await t2.page.reload({ waitUntil:"load" }); await t2.page.waitForTimeout(500); await goStudent(t2.page); await waitFor(async () => await status(t2.page) === "profile-ok");
+    const fin = await waitFor(async () => mock.attempts.length === 25 && JSON.parse((await dumpLS(t2.page)).ethixoBackfill || "{}").state === "done", 90000);
+    assert(fin && mock.attempts.length === 25, "reloaded mid-way: it resumes and finishes with 25 rows, no duplicates (" + mock.attempts.length + ")");
+    await c2.ctx.close();
+  }
+
   await browser.close();
-  [ON, AUTHONLY, WRONG, ORIG, OFF].forEach(s => s.srv.close());
+  [ON, BF, AUTHONLY, WRONG, ORIG, OFF].forEach(s => s.srv.close());
   try{ fs.rmSync(tmp, { recursive:true, force:true }); }catch(e){}
   console.log("\n==================================================\nRESULTS: " + passed + " passed, " + failed + " failed\n==================================================");
   process.exit(failed ? 1 : 0);
