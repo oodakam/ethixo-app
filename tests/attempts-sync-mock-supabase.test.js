@@ -43,15 +43,15 @@ function serve(dir){
 // ---------- the mock Supabase (auth + profiles + a PostgREST stand-in for attempts) ----------
 function b64u(o){ return Buffer.from(typeof o === "string" ? o : JSON.stringify(o)).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_"); }
 function makeMock(){
-  const m = { mode:"ok", log:[], users:0, profiles:{}, tokens:{}, attempts:[], seq:0, studentIdSeen:false, otherTables:[] };
-  m.reset = () => { m.mode = "ok"; m.log = []; m.studentIdSeen = false; m.otherTables = []; };
+  const m = { mode:"ok", log:[], users:0, profiles:{}, tokens:{}, attempts:[], seq:0, studentIdSeen:false, otherTables:[], postDelay:0, conflicts:0, posts:0 };
+  m.reset = () => { m.mode = "ok"; m.log = []; m.studentIdSeen = false; m.otherTables = []; m.postDelay = 0; m.conflicts = 0; m.posts = 0; };
   m.handler = async function(route){
     const req = route.request(), url = new URL(req.url()), method = req.method();
     const cors = { "access-control-allow-origin": "*", "access-control-allow-methods": "*", "access-control-allow-headers": req.headers()["access-control-request-headers"] || "*", "access-control-expose-headers": "*" };
     if(method === "OPTIONS") return route.fulfill({ status:204, headers:cors });
     let body = null; try{ body = req.postData() ? JSON.parse(req.postData()) : null; }catch(e){ body = req.postData(); }
     const h = req.headers();
-    const entry = { method, path: url.pathname, query: url.search, body, authz: h["authorization"] || "", prefer: h["prefer"] || "" };
+    const entry = { method, path: url.pathname, query: url.search, body, authz: h["authorization"] || "", prefer: h["prefer"] || "", t: Date.now() };
     m.log.push(entry);
     if(m.mode === "offline") return route.abort("internetdisconnected");
     const json = (status, obj, extra) => route.fulfill({ status, headers:Object.assign({ "content-type":"application/json" }, cors, extra || {}), body: obj === undefined ? "" : JSON.stringify(obj) });
@@ -89,8 +89,10 @@ function makeMock(){
         return json(200, rows.map(shape));
       }
       if(method === "POST"){
+        if(m.postDelay) await sleep(m.postDelay);   // test hook: widens the window so two writers can both pass their look-up first
+        m.posts++;
         if(body && "student_id" in body){ m.studentIdSeen = true; if(body.student_id !== uid) return json(403, { code:"42501", message:"new row violates row-level security policy" }); }
-        if(mine.some(r => r.level === body.level && r.subject_key === body.subject_key && r.lesson_id === body.lesson_id && r.q_idx === body.q_idx)) return json(409, { code:"23505", message:"duplicate key" });
+        if(m.attempts.some(r => r.student_id === uid && r.level === body.level && r.subject_key === body.subject_key && r.lesson_id === body.lesson_id && r.q_idx === body.q_idx)) { m.conflicts++; return json(409, { code:"23505", message:"duplicate key" }); }
         m.attempts.push({ id:"att-" + (++m.seq), student_id:uid, level:body.level, subject_key:body.subject_key, lesson_id:body.lesson_id, q_idx:body.q_idx, data:body.data });   // owner = token, never the client
         return route.fulfill({ status:201, headers:cors });
       }
@@ -308,6 +310,77 @@ const K0 = "attempts:P6:SS:2.1:0", K1 = "attempts:P6:SS:2.1:1";
     assert(JSON.stringify(JSON.parse(n.ls[K0])) === JSON.stringify(seed[K0]) && JSON.stringify(JSON.parse(n.ls[K1])) === JSON.stringify(seed[K1]), "seeded attempts are byte-identical afterwards (existing local history is never modified)");
     assert(o.errors.length === 0 && n.errors.length === 0, "no JavaScript errors in either");
     assert(attReqs(mock).length === 0, "existing local history is NOT backfilled (that is Phase 4's opt-in step): no attempts request without a new write");
+  }
+
+
+  console.log("\nTest 11: the kill switch (ethixoSyncKill=1) stops attempt uploads in a real browser; local learning is untouched; removing it resumes");
+  {
+    mock.reset(); mock.attempts = []; mock.users = 0; mock.profiles = {}; mock.tokens = {};
+    const c = await newCtx(browser, mock, ON.port, null); const o = await open(c.ctx, ON.port);
+    await goStudent(o.page); await waitFor(async () => await status(o.page) === "profile-ok");
+    await o.page.evaluate(() => localStorage.setItem("ethixoSyncKill", "1"));
+    mock.log = []; const screenBefore = await screen(o.page);
+    await o.page.evaluate(([k, v]) => sSet(k, v), [K0, [A(1), A(2)]]);
+    await o.page.waitForTimeout(4500);
+    assert(attReqs(mock).length === 0 && mock.attempts.length === 0, "with the kill switch set: zero attempts requests and no remote row");
+    const ls = await dumpLS(o.page);
+    assert(JSON.parse(ls[K0]).length === 2, "the answers are still saved locally (learning unaffected)");
+    assert(await screen(o.page) === screenBefore && o.errors.length === 0, "the screen is unchanged and there are no JavaScript errors");
+    await o.page.evaluate(() => localStorage.removeItem("ethixoSyncKill"));
+    await o.page.evaluate(([k, v]) => sSet(k, v), [K0, [A(1), A(2), A(3)]]);
+    const ok = await waitFor(async () => mock.attempts.length === 1 && mock.attempts[0].data.length === 3, 12000);
+    assert(ok, "after the switch is removed, the next real write uploads normally (3 attempts, one row)");
+    await c.ctx.close();
+  }
+
+  console.log("\nTest 12: corrupt local data (browser level) is never uploaded, never retried in a loop, and does not block other questions");
+  {
+    mock.reset(); mock.attempts = []; mock.users = 0; mock.profiles = {}; mock.tokens = {};
+    const c = await newCtx(browser, mock, ON.port, null); const o = await open(c.ctx, ON.port);
+    await goStudent(o.page); await waitFor(async () => await status(o.page) === "profile-ok");
+    mock.log = []; const screenBefore = await screen(o.page);
+    const bad = [{ answer:"fake", score:"abc", at:1 }];
+    await o.page.evaluate(([k, v]) => sSet(k, v), [K0, bad]);
+    await o.page.waitForTimeout(4500);
+    assert(attReqs(mock).length === 0, "a non-numeric score is rejected before any request (no GET, no POST)");
+    assert(JSON.stringify(JSON.parse((await dumpLS(o.page))[K0])) === JSON.stringify(bad), "the local value is left exactly as it was (never modified or deleted)");
+    await o.page.evaluate(([k, v]) => sSet(k, v), [K1, [A(7)]]);
+    const ok = await waitFor(async () => mock.attempts.some(r => r.q_idx === 1), 12000);
+    assert(ok && !mock.attempts.some(r => r.q_idx === 0), "a valid question still uploads; the corrupt one never does");
+    mock.log = []; await o.page.waitForTimeout(7000);
+    assert(attReqs(mock).length === 0, "no retry loop: nothing is sent for 7 s afterwards");
+    assert(await screen(o.page) === screenBefore && o.errors.length === 0, "the screen is unchanged and there are no JavaScript errors");
+    const big = []; for(let i = 0; i < 1001; i++) big.push({ answer:"x", score:1, at:i + 1 });
+    mock.log = []; await o.page.evaluate(([k, v]) => sSet(k, v), ["attempts:P6:SS:2.1:2", big]); await o.page.waitForTimeout(4500);
+    assert(attReqs(mock).length === 0, "an array of 1001 attempts (over the 1000 cap) is not uploaded");
+    await c.ctx.close();
+  }
+
+  console.log("\nTest 13: two tabs of the same student racing on the same new question -> one row, no lost attempt, no error");
+  {
+    mock.reset(); mock.attempts = []; mock.users = 0; mock.profiles = {}; mock.tokens = {};
+    const c = await newCtx(browser, mock, ON.port, null);
+    const t1 = await open(c.ctx, ON.port), t2 = await open(c.ctx, ON.port);
+    await goStudent(t1.page); await waitFor(async () => await status(t1.page) === "profile-ok");
+    await goStudent(t2.page); await waitFor(async () => await status(t2.page) === "profile-ok");
+    mock.log = []; mock.postDelay = 700;      // both tabs finish their look-up (empty) before either insert lands
+    await Promise.all([t1.page.evaluate(([k, v]) => sSet(k, v), [K0, [A(1), A(2)]]), t2.page.evaluate(([k, v]) => sSet(k, v), [K0, [A(1), A(2)]])]);
+    const done = await waitFor(async () => {
+      const a = JSON.parse((await dumpLS(t1.page)).ethixoOutbox || "[]"), b = JSON.parse((await dumpLS(t2.page)).ethixoOutbox || "[]");
+      return mock.posts >= 2 && mock.attempts.length >= 1 && a.length === 0 && b.length === 0; }, 20000);
+    await sleep(3500);      // let the loser finish its re-read + update
+    assert(done, "both tabs finish and both outboxes drain to empty");
+    mock.postDelay = 0;
+    assert(mock.attempts.length === 1, "exactly ONE remote row for the question (the unique key held)");
+    assert(mock.conflicts >= 1, "the race really happened: at least one insert hit the duplicate-key conflict (" + mock.conflicts + ")");
+    assert(JSON.stringify(mock.attempts[0].data.map(x => x.at).sort()) === JSON.stringify([1, 2]), "the remote history holds both attempts (nothing lost)");
+    const seq = reqs(mock).filter(e => /attempts/.test(e.path)).map(e => e.method).join(",");
+    assert(seq === "GET,POST,GET,POST,GET", "the loser recovered with ONE re-read after the conflict and, because the remote already held everything, wrote nothing more - no retry storm (" + seq + ")");
+    const ar = attReqs(mock); const gap = ar.length >= 5 ? ar[4].t - ar[3].t : 999999;
+    assert(gap < 2500, "the re-read follows the conflict IMMEDIATELY (" + gap + " ms), i.e. in the same send, not via the 5 s outbox back-off");
+    assert(attReqs(mock).length <= 8, "bounded request count (" + attReqs(mock).length + ")");
+    assert(t1.errors.length === 0 && t2.errors.length === 0, "no JavaScript errors in either tab");
+    await c.ctx.close();
   }
 
   await browser.close();
