@@ -1,3 +1,5 @@
+> **STATUS: APPLIED AND VERIFIED on `ethixo-sg-dev` (dev only) on 2026-11-10.** See `LIVE-VERIFICATION.md`. Not applied to any other project.
+
 # Ethixo schema v1.1 hardening — PROPOSAL ONLY (not applied anywhere)
 
 Status: prepared 9 Nov 2026. Nothing has been run against Supabase. Nothing is merged. The files below are for review.
