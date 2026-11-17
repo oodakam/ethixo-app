@@ -439,12 +439,14 @@ console.log("\nTest 17: existing functions are untouched; exactly three guarded 
     .replace("    if(!list.length) return summary;          // nothing queued: write nothing (no empty ethixoOutbox key is ever created)\n", "")
     .replace(/    \/\/ Items queued \(or re-queued\) while the senders above[\s\S]*?writeBox\(merged\.length > MAX_OUTBOX \? merged\.slice\(merged\.length - MAX_OUTBOX\) : merged\);\n/, "    writeBox(keep);\n")
     .replace(/,\n  kinds: \(\(typeof DB_ATTEMPTS_SYNC[\s\S]*?\} \}\);/, " });");
-  const strip = (s) => stripPhase3(s).replace(/\/\* ETHIXO-CONFIG-BEGIN[\s\S]*?ETHIXO-CONFIG-END \*\/\n\n/, "").replace(/\n\/\* ETHIXO-AUTH-BEGIN[\s\S]*?ETHIXO-AUTH-END \*\/\n/, "")
+  // Pilot: the approved Class Code card block and its two call sites on the student dashboard.
+  const stripPilot = (s) => s.replace(/\/\* ETHIXO-CLASSCODE-BEGIN[\s\S]*?ETHIXO-CLASSCODE-END \*\/\n\n/, "").replace(/\n *classCodeCardHtml\(\)\+/g, "");
+  const strip = (s) => stripPhase3(stripPilot(s)).replace(/\/\* ETHIXO-CONFIG-BEGIN[\s\S]*?ETHIXO-CONFIG-END \*\/\n\n/, "").replace(/\n\/\* ETHIXO-AUTH-BEGIN[\s\S]*?ETHIXO-AUTH-END \*\/\n/, "")
     .replace(/\n\s*try\{ ETHIXO_AUTH\.studentActive\([^)]*\); \}catch\(_e\)\{[^}]*\}/g, "").replace(/ try\{ ETHIXO_AUTH\.studentActive\([^)]*\); \}catch\(_e\)\{[^}]*\}/g, "")
     .replace(/  \/\/ Host allow-list\.[\s\S]*?  const getHost = [^\n]*\n/, "")
     .replace(/    if\(requireAllowList \|\| listProvided\)\{[^\n]*\n/, "")
     .replace(", requireAllowList: true, allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== \"undefined\" ? DB_SYNC_ALLOWED_HOSTS : [])", "");
-  assert(strip(html) === orig, "removing the approved Phase 2, Phase 3 and Phase 4a additions restores the Phase 0+1 index.html exactly (nothing else changed)");
+  assert(strip(html) === orig, "removing the approved Phase 2, Phase 3 and Phase 4a additions restores the Phase 0+1 index.html exactly (nothing else changed; pilot Class Code block also stripped)");
 }
 
 console.log("\nTest 18: host allow-list FAILS CLOSED (empty / missing / malformed list => off; only an explicitly listed host works)");

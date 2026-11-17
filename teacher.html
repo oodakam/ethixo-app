@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Ethixo — Teacher view (pilot)</title>
+<style>
+  :root{--brand:#4b3fd6;--ink:#1f2333;--muted:#6b7086;--border:#e3e5ef;--bg:#f6f7fb;}
+  *{box-sizing:border-box} body{margin:0;font-family:Montserrat,system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);background:var(--bg);}
+  main{max-width:1000px;margin:0 auto;padding:24px 16px;}
+  h1{font-size:22px;margin:0 0 4px} .muted{color:var(--muted);font-size:14px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px;margin:16px 0;}
+  input,select{padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit;}
+  button{padding:10px 16px;border:0;border-radius:8px;background:var(--brand);color:#fff;font:inherit;font-weight:600;cursor:pointer;}
+  button.link{background:none;color:var(--brand);padding:0;font-weight:500}
+  table{width:100%;border-collapse:collapse;font-size:14px} th,td{text-align:left;padding:8px;border-bottom:1px solid var(--border);}
+  th{cursor:pointer;white-space:nowrap} .code{font-family:ui-monospace,monospace;font-size:18px;letter-spacing:1px;}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+</style>
+</head>
+<body>
+<main id="app"><p class="muted">Loading…</p></main>
+<script>
+/* ETHIXO-TEACHER-CONFIG-BEGIN
+   PLACEHOLDERS ONLY in committed code. Real values are filled in at request time by api/pilot-app.js, and only on an
+   allow-listed, non-Production pilot host (served at /pilot-teacher). Opened anywhere else, this page stays inert. */
+const SUPABASE_URL = "__SET_ME__";
+const SUPABASE_PUBLISHABLE_KEY = "__SET_ME__";
+const DB_SYNC_ALLOWED_HOSTS = [];
+/* ETHIXO-TEACHER-CONFIG-END */
+
+/* Pilot teacher view: READ-ONLY.
+   - Separate sign-in (email link) and separate session storage from the student app.
+   - Reads ONLY: own profile, own classes (RLS), and teacher_attempt_summary() — scores, counts, timestamps,
+     thinking-help flag. No raw attempts, answers, feedback or ScholarVault content exist in this view, and RLS gives
+     teachers no access to those tables.
+   - Writes ONLY: create_my_profile('teacher', name) once (unapproved by default; approval is an operator step). */
+const LIB = "assets/vendor/supabase-js-2.117.2.umd.js";
+const app = document.getElementById("app");
+let client = null, view = { classes: [], classId: null, rows: [], sort: "student", msg: "" };
+
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function show(html){ app.innerHTML = html; }
+function configured(){
+  return /^https:\/\/[a-z0-9]+\.supabase\.co$/.test(SUPABASE_URL) && /^sb_publishable_/.test(SUPABASE_PUBLISHABLE_KEY)
+    && DB_SYNC_ALLOWED_HOSTS.indexOf(location.hostname.toLowerCase()) !== -1;
+}
+function loadLib(){
+  return new Promise((resolve, reject) => {
+    if (window.supabase && window.supabase.createClient) return resolve(window.supabase);
+    const s = document.createElement("script"); s.src = LIB;
+    s.onload = () => window.supabase ? resolve(window.supabase) : reject(new Error("lib"));
+    s.onerror = () => reject(new Error("lib")); document.head.appendChild(s);
+  });
+}
+
+async function boot(){
+  if (!configured()) { show('<h1>Teacher view</h1><p class="muted">The teacher view is not available on this address.</p>'); return; }
+  try {
+    const lib = await loadLib();
+    client = lib.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, { auth: {
+      persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "pkce", storageKey: "ethixoTeacherAuth" } });
+    await route();
+  } catch (e) { show('<h1>Teacher view</h1><p class="muted">Could not load. Please refresh the page.</p>'); }
+}
+
+async function route(){
+  const { data } = await client.auth.getSession();
+  const user = data && data.session ? data.session.user : null;
+  if (!user || user.is_anonymous) return signInScreen();
+  const p = await client.from("profiles").select("id,role,display_name,is_approved").eq("id", user.id).maybeSingle();
+  if (p.error) return show('<p class="muted">Could not load your profile. Please refresh.</p>' + signOutLink());
+  if (!p.data) return nameScreen(user.email);
+  if (p.data.role !== "teacher") return show('<h1>Teacher view</h1><p>This account is not a teacher account.</p>' + signOutLink());
+  if (!p.data.is_approved) return show('<h1>Thanks, ' + esc(p.data.display_name) + '</h1><p>Your teacher account is waiting for approval by Ethixo. Please check back later.</p>' + signOutLink());
+  return dashboard(p.data);
+}
+
+function signOutLink(){ return '<p><button class="link" onclick="signOut()">Sign out</button></p>'; }
+async function signOut(){ try { await client.auth.signOut(); } catch (e) {} location.replace(location.pathname); }
+
+function signInScreen(msg){
+  show('<h1>Ethixo — Teacher view</h1><p class="muted">Pilot. Sign in with your school email; we will email you a sign-in link.</p>' +
+    '<div class="card"><div class="row"><input id="email" type="email" placeholder="you@school.edu.sg" style="flex:1 1 260px">' +
+    '<button onclick="sendLink()">Email me a link</button></div>' + (msg ? '<p class="muted">' + esc(msg) + '</p>' : '') + '</div>');
+}
+async function sendLink(){
+  const email = String(document.getElementById("email").value).trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return signInScreen("Please enter a valid email address.");
+  const r = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true } });
+  signInScreen(r.error ? "Could not send the link. Please try again in a minute." : "Check your inbox and open the link on this device and browser.");
+}
+
+function nameScreen(email, msg){
+  show('<h1>Welcome</h1><p class="muted">Signed in as ' + esc(email) + '. Enter the name students and Ethixo will see.</p>' +
+    '<div class="card"><div class="row"><input id="tname" maxlength="40" placeholder="e.g. Ms Tan" style="flex:1 1 220px">' +
+    '<button onclick="createTeacher()">Continue</button></div>' + (msg ? '<p class="muted">' + esc(msg) + '</p>' : '') + '</div>' + signOutLink());
+}
+async function createTeacher(){
+  const name = String(document.getElementById("tname").value).trim();
+  if (!name || name.length > 40) return nameScreen("", "Please enter a name (up to 40 characters).");
+  const r = await client.rpc("create_my_profile", { p_role: "teacher", p_display_name: name, p_level: null });
+  if (r.error) return nameScreen("", "Could not save. Please try again.");
+  route();
+}
+
+async function dashboard(profile){
+  const c = await client.from("classes").select("id,name,join_code,created_at").order("created_at");
+  view.classes = c.error ? [] : (c.data || []);
+  if (!view.classId && view.classes.length) view.classId = view.classes[0].id;
+  view.profile = profile;
+  await loadSummary();
+}
+async function loadSummary(){
+  view.rows = []; view.msg = "";
+  if (view.classId) {
+    const r = await client.rpc("teacher_attempt_summary", { p_class_id: view.classId });
+    if (r.error) view.msg = "Could not load progress. Please refresh.";
+    else view.rows = aggregate(r.data || []);
+  }
+  renderDashboard();
+}
+// One row per student + lesson, built only from the summary function's aggregated fields.
+function aggregate(rows){
+  const m = new Map();
+  for (const r of rows) {
+    const k = r.student_id + "|" + r.level + "|" + r.subject_key + "|" + r.lesson_id;
+    let g = m.get(k);
+    if (!g) { g = { student: r.display_name, lesson: r.level + " " + r.subject_key + " · " + r.lesson_id, questions: 0, attempts: 0, latestAt: null, latestScore: null, best: null, thinking: false }; m.set(k, g); }
+    g.questions += 1; g.attempts += Number(r.attempt_count) || 0;
+    if (r.best_score != null && (g.best == null || Number(r.best_score) > g.best)) g.best = Number(r.best_score);
+    if (r.latest_at != null && (g.latestAt == null || Number(r.latest_at) > g.latestAt)) { g.latestAt = Number(r.latest_at); g.latestScore = r.latest_score == null ? null : Number(r.latest_score); }
+    g.thinking = g.thinking || r.used_thinking === true;
+  }
+  return Array.from(m.values());
+}
+function setSort(k){ view.sort = k; renderDashboard(); }
+function pickClass(id){ view.classId = id; loadSummary(); }
+function fmtDate(ms){ if (ms == null) return "–"; const d = new Date(ms); return isNaN(d) ? "–" : d.toLocaleString("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
+
+function renderDashboard(){
+  const cls = view.classes.find(c => c.id === view.classId);
+  const rows = view.rows.slice().sort((a, b) =>
+    view.sort === "lesson" ? a.lesson.localeCompare(b.lesson) || a.student.localeCompare(b.student)
+    : view.sort === "recent" ? (b.latestAt || 0) - (a.latestAt || 0)
+    : a.student.localeCompare(b.student) || a.lesson.localeCompare(b.lesson));
+  const picker = view.classes.length > 1
+    ? '<select onchange="pickClass(this.value)">' + view.classes.map(c => '<option value="' + esc(c.id) + '"' + (c.id === view.classId ? " selected" : "") + '>' + esc(c.name) + '</option>').join("") + '</select>'
+    : "";
+  let body;
+  if (!view.classes.length) body = '<div class="card"><p>No class yet. Ethixo will set up your class and you will see its class code here.</p></div>';
+  else body = '<div class="card"><div class="row" style="justify-content:space-between"><div><b>' + esc(cls ? cls.name : "") + '</b> ' + picker +
+      '</div><div>Class code for students: <span class="code">' + esc(cls ? cls.join_code : "") + '</span></div></div></div>' +
+    '<div class="card">' + (view.msg ? '<p class="muted">' + esc(view.msg) + '</p>' : "") +
+    (rows.length ? '<table><thead><tr><th onclick="setSort(\'student\')">Student</th><th onclick="setSort(\'lesson\')">Lesson</th><th>Questions attempted</th><th>Attempts</th><th>Latest score</th><th>Best score</th><th>Used thinking help</th><th onclick="setSort(\'recent\')">Last activity</th></tr></thead><tbody>' +
+      rows.map(r => '<tr><td>' + esc(r.student) + '</td><td>' + esc(r.lesson) + '</td><td>' + r.questions + '</td><td>' + r.attempts + '</td><td>' + (r.latestScore == null ? "–" : esc(r.latestScore)) +
+        '</td><td>' + (r.best == null ? "–" : esc(r.best)) + '</td><td>' + (r.thinking ? "Yes" : "–") + '</td><td>' + fmtDate(r.latestAt) + '</td></tr>').join("") + '</tbody></table>'
+      : '<p class="muted">No attempts yet.</p>') +
+    '<p class="muted" style="margin-top:12px">Read-only. Shows scores and activity only — students\' written answers are never uploaded. <button class="link" onclick="loadSummary()">Refresh</button></p></div>';
+  show('<div class="row" style="justify-content:space-between"><div><h1>Teacher view</h1><p class="muted">' + esc(view.profile.display_name) + ' · pilot</p></div>' + signOutLink() + '</div>' + body);
+}
+
+boot();
+</script>
+</body>
+</html>

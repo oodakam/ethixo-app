@@ -1,0 +1,9 @@
+{
+  "functions": {
+    "api/pilot-app.js": { "includeFiles": "{index.html,teacher.html}" }
+  },
+  "rewrites": [
+    { "source": "/pilot", "destination": "/api/pilot-app?page=app" },
+    { "source": "/pilot-teacher", "destination": "/api/pilot-app?page=teacher" }
+  ]
+}
