@@ -18,15 +18,28 @@ import { join } from "node:path";
 
 const PAGES = { app: "index.html", teacher: "teacher.html" };
 
-function pilotConfig(req, env) {
-  if (env.VERCEL_ENV === "production") return null;
+// Why the config was (not) applied: a reason code only, never a value. Used by ?page=diag (non-Production only).
+function pilotReason(req, env) {
+  if (env.VERCEL_ENV === "production") return "production";
   const hosts = String(env.ETHIXO_PILOT_HOSTS || "").split(",").map((h) => h.trim().toLowerCase()).filter((h) => /^[a-z0-9.-]+$/.test(h));
+  if (!hosts.length) return env.ETHIXO_PILOT_HOSTS ? "hosts-malformed" : "hosts-missing";
   const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim().split(":")[0].toLowerCase();
-  if (!host || hosts.indexOf(host) === -1) return null;
+  if (!host) return "no-host-header";
+  if (hosts.indexOf(host) === -1) return "host-not-listed";
   const url = String(env.ETHIXO_PILOT_SUPABASE_URL || "").trim().replace(/\/$/, "");
   const key = String(env.ETHIXO_PILOT_SUPABASE_PUBLISHABLE_KEY || "").trim();
-  if (!/^https:\/\/[a-z0-9]+\.supabase\.co$/.test(url)) return null;
-  if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) return null;
+  if (!url) return "url-missing";
+  if (!/^https:\/\/[a-z0-9]+\.supabase\.co$/.test(url)) return "url-malformed";
+  if (!key) return "key-missing";
+  if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) return "key-not-publishable";
+  return "ok";
+}
+
+function pilotConfig(req, env) {
+  if (pilotReason(req, env) !== "ok") return null;
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim().split(":")[0].toLowerCase();
+  const url = String(env.ETHIXO_PILOT_SUPABASE_URL || "").trim().replace(/\/$/, "");
+  const key = String(env.ETHIXO_PILOT_SUPABASE_PUBLISHABLE_KEY || "").trim();
   const mode = env.ETHIXO_PILOT_SYNC_MODE === "shadow" || env.ETHIXO_PILOT_SYNC_MODE === "on" ? env.ETHIXO_PILOT_SYNC_MODE : "off";
   return { host, url, key, mode, attempts: env.ETHIXO_PILOT_ATTEMPTS_SYNC === "true", backfill: env.ETHIXO_PILOT_BACKFILL === "true" };
 }
@@ -54,6 +67,17 @@ function applyConfig(html, page, cfg) {
 }
 
 export default function handler(req, res) {
+  if (req.query && req.query.page === "diag") {
+    let reason = "error";
+    try { reason = pilotReason(req, process.env); } catch (e) { reason = "error"; }
+    if (reason === "production") { res.status(404).send("Not found"); return; }
+    const sm = process.env.ETHIXO_PILOT_SYNC_MODE;
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({ reason, env: process.env.VERCEL_ENV || null, syncMode: sm === "shadow" || sm === "on" ? sm : "off",
+      attempts: process.env.ETHIXO_PILOT_ATTEMPTS_SYNC === "true", backfill: process.env.ETHIXO_PILOT_BACKFILL === "true",
+      commit: (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 7) || null });
+    return;
+  }
   const page = Object.prototype.hasOwnProperty.call(PAGES, req.query && req.query.page) ? req.query.page : "app";
   let html;
   try {
@@ -71,4 +95,4 @@ export default function handler(req, res) {
   res.status(200).send(configured || html);
 }
 
-export { pilotConfig, applyConfig };
+export { pilotConfig, pilotReason, applyConfig };
