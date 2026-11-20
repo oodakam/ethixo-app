@@ -5,6 +5,8 @@
 **Pilot facts:** about 1–2 weeks · 1 teacher · maximum 10 students · **Primary 6 only** · run by ELELET DIGITAL PTE. LTD. (UEN 202233369W), registered office: 101 Cecil Street, #20-11, Tong Eng Building, Singapore 069533.
 
 **Required inputs (unresolved):**
+- `[PILOT START DATE — REQUIRED INPUT]`
+- `[PILOT END DATE — REQUIRED INPUT]`
 - `[TEACHER NAME / SCHOOL — REQUIRED INPUT]` (the pilot teacher and school are not final)
 - `[OPERATOR ACCESS LIST — REQUIRED INPUT]` (optional)
 - `[PRIVACY ADVISER REVIEW DATE — REQUIRED INPUT]` (must be completed before real student participation)
@@ -17,7 +19,7 @@
 
 **Ethixo pilot — parent/guardian consent**
 
-Ethixo is a practice app with English, Science and Social Science lessons for Primary 5–6 students. This pilot is open to **Primary 6 students only**. Lesson content in this pilot build is sample material. ELELET DIGITAL PTE. LTD. (UEN 202233369W), registered office 101 Cecil Street, #20-11, Tong Eng Building, Singapore 069533, is running a small pilot of about 1–2 weeks with one teacher and at most 10 students, from 1 December 2026 to 14 December 2026. Taking part is optional.
+Ethixo is a practice app with English, Science and Social Science lessons for Primary 5–6 students. This pilot is open to **Primary 6 students only**. Lesson content in this pilot build is sample material. ELELET DIGITAL PTE. LTD. (UEN 202233369W), registered office 101 Cecil Street, #20-11, Tong Eng Building, Singapore 069533, is running a small pilot of about 1–2 weeks with one teacher and at most 10 students, from `[PILOT START DATE]` to `[PILOT END DATE]`. Taking part is optional.
 
 **1. What is stored in the pilot cloud database (Supabase, Singapore region)**
 
@@ -52,7 +54,7 @@ To produce feedback, the app sends your child's written answer, the thinking-hel
 Tell the pilot teacher, who forwards the request to the pilot operator at Elelet, or write to contact@ethixo.ai. Elelet will delete your child's pilot database data **within 7 days** of receiving the request, and will confirm through the teacher or by email once done. Deletion removes your child's anonymous account, profile, class membership and stored practice results. It does not remove data on your child's own device. You can clear that by clearing the browser's site data for the pilot address. Please also stop using the pilot link: if your child keeps using it, the app may create a new anonymous identity and begin syncing again. Deletion does not cover provider technical logs or AI-feedback data held by providers (see sections 4 and 5).
 
 **8. How long data is kept**
-For the pilot duration (1 December to 14 December 2026). After the pilot, Elelet will erase all pilot student data, and the pilot teacher account, pilot class and class code, within 7 days after the pilot end date, unless a separately documented reason to retain them exists.
+For the pilot duration. After the pilot, Elelet will erase all pilot student data, and the pilot teacher account, pilot class and class code, within 7 days after the pilot end date, unless a separately documented reason to retain them exists.
 
 **9. Consent**
 - ☐ I am the parent/guardian of the student named below and have read this form.
