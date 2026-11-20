@@ -37,12 +37,12 @@ The pilot app is set to upload earlier practice **scores** that already exist on
 Your child's written answers, the feedback shown (strengths and next steps), ScholarVault content and the app's other saved progress and settings are **not uploaded to the pilot database.** They stay in your child's browser on their device.
 
 **4. AI feedback: written answers do leave the device**
-To produce feedback, the app sends your child's written answer, the thinking-help conversation and earlier attempts at that question from the device, through Elelet's feedback function on Vercel, to the **Anthropic API** (an AI service). This happens each time feedback is requested. In the app's code, this function does not save or log the answer text, and none of it is stored in the pilot Supabase database. Elelet does not control how long Anthropic or Vercel handle or retain this data. That handling is subject to the applicable account terms of each provider. Elelet does not claim zero data retention or any specific retention period for it.
+To produce feedback, the app sends your child's written answer, the thinking-help conversation, earlier attempts at that question and any practice question your child writes from the device, through Elelet's Vercel functions (feedback, thinking help and practice-question check), to the **Anthropic API** (an AI service). This happens each time feedback is requested. In the app's code, these functions do not save this text, and their logs are limited to call timing and usage information and any error message returned by Anthropic. None of it is stored in the pilot Supabase database. Elelet does not control how long Anthropic or Vercel handle or retain this data. That handling is subject to the applicable account terms of each provider. Elelet does not claim zero data retention or any specific retention period for it.
 
 **5. Who can see what**
 - **The pilot teacher** sees, for their own class only: student display name, level, subject and lesson, number of questions attempted, number of attempts, latest score, best score, whether thinking help was used, and last activity time. Behind the page, the same summary also carries the student's internal anonymous ID and the question number to the teacher's browser, but the page does not display them. The teacher cannot see written answers, feedback or ScholarVault content.
 - **The pilot operator at Elelet** has administrative access to the pilot database, so it can technically view every item in section 1. It uses this access only to run and support the pilot and to carry out deletion requests. `[OPERATOR ACCESS LIST — REQUIRED INPUT]`
-- **Service providers:** Supabase (database and sign-in, Singapore region), Vercel (delivers the app pages and runs the feedback function), and Anthropic (AI feedback, section 4). Providers retain technical logs according to their applicable settings and terms. Elelet does not control provider-side retention.
+- **Service providers:** Supabase (database and sign-in, Singapore region), Vercel (delivers the app pages and runs the AI functions), and Anthropic (AI feedback, section 4). Providers retain technical logs according to their applicable settings and terms. Elelet does not control provider-side retention.
 - **Your child's device:** the on-device data in section 3 is visible to anyone using that device.
 
 **6. No account recovery; data may be lost**
@@ -92,7 +92,7 @@ Parent/guardian name: ______________ Signature: ______________ Date: __________
 
 **What you can see:** for your own class only, the class code and the summary fields listed in section A.5. Students who have joined but have no attempts yet do not appear in the summary table. You cannot see written answers, feedback, ScholarVault content or on-device progress.
 
-**What students' written answers do:** they are sent through the Vercel feedback function to the Anthropic API for AI feedback, and are not stored in the pilot database (section A.4). Provider-side handling and retention are subject to the applicable provider account terms and are not controlled by Elelet (see section A.4).
+**What students' written answers do:** they are sent through Elelet's Vercel functions to the Anthropic API for AI feedback, and are not stored in the pilot database (section A.4). Provider-side handling and retention are subject to the applicable provider account terms and are not controlled by Elelet (see section A.4).
 
 **Your responsibilities:**
 1. Only invite students whose parent/guardian has returned the signed consent form. Keep the forms, or confirm where Elelet keeps them.
@@ -119,7 +119,7 @@ Name: ______________ Signature: ______________ Date: __________
 | **Student's device (browser storage):** written answers, feedback, ScholarVault, app progress, local copy of scores | Clearing browser data, private/incognito windows, changing or reinstalling the browser, a lost or replaced device | **No.** Nothing on the device is backed up. There is no account recovery. |
 | **Pilot database (Supabase, Singapore):** anonymous identity, profile, class membership, minimal practice results | Service fault or data loss. The pilot plan has **no backups or point-in-time recovery.** | **No.** There is no backup to restore. |
 | **Pilot database, after a deletion request** | Data is deleted within 7 days of the request | Not recoverable after deletion. |
-| **AI feedback (Vercel function → Anthropic)** | Written answers are sent for feedback. They are not stored in the pilot database. | Handling and retention are subject to the applicable provider account terms and are not controlled by Elelet. Provider logs are retained according to the providers' settings and terms. |
+| **AI feedback (Vercel functions → Anthropic)** | Written answers, thinking-help text and practice questions are sent for AI feedback. They are not stored in the pilot database. | Handling and retention are subject to the applicable provider account terms and are not controlled by Elelet. Provider logs are retained according to the providers' settings and terms. |
 | **Service availability** | The app, sign-in, AI feedback or teacher view may be unavailable, slow or changed without notice. The database project can pause after about 7 days without activity until it is resumed. | The pilot is a trial. There is no uptime guarantee. |
 
 Because the pilot database holds only minimal results, losing it costs scores and timestamps only. A child who loses their device also loses their own written work, which cannot be restored.

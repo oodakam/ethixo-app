@@ -3,7 +3,7 @@
 -- Safety stops: refuses to run if there is any class, more than 10 profiles, or any email that is not an approved test address.
 -- Email check FAILS CLOSED: every non-null email must exactly match an approved test pattern, or the run stops.
 --   Approved: <local-part>@example.invalid or <local-part>@example.com (reserved domains, RFC 2606/6761 - can never be a real mailbox).
---   Whole address is anchored, case-insensitive, no subdomains, no substring matching (so 'testa.kumar@gmail.com' STOPS).
+--   Whole address is anchored, case-insensitive, no subdomains, no substring matching (so an address on any other domain, such as a gmail.com mailbox, STOPS).
 --   Empty-string or malformed emails also STOP. To approve another domain, add it here explicitly after review.
 begin;
 do $$
