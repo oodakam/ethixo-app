@@ -2,17 +2,14 @@
 
 **Status:** Draft. This is not legal advice and makes no claim of legal or PDPA compliance. Elelet's own privacy/PDPA adviser must review it before any real student takes part. **No real student participates until that review is done and the consent form is signed.**
 
-**Pilot facts:** about 1–2 weeks · 1 teacher · maximum 10 students · **Primary 6 only** · run by `[ELELET LEGAL ENTITY — REQUIRED INPUT]`.
+**Pilot facts:** about 1–2 weeks · 1 teacher · maximum 10 students · **Primary 6 only** · run by ELELET DIGITAL PTE. LTD. (UEN 202233369W), registered office: 101 Cecil Street, #20-11, Tong Eng Building, Singapore 069533.
 
 **Required inputs (unresolved):**
-- `[ELELET LEGAL ENTITY — REQUIRED INPUT]`
 - `[ELELET CONTACT EMAIL — REQUIRED INPUT]`
-- `[ELELET REGISTERED ADDRESS / UEN — REQUIRED INPUT]` (only if the adviser wants it shown)
 - `[PILOT START DATE — REQUIRED INPUT]`
 - `[PILOT END DATE — REQUIRED INPUT]`
 - `[TEACHER NAME / SCHOOL — REQUIRED INPUT]`
-- `[LOG RETENTION — REQUIRED INPUT]` (Supabase and Vercel)
-- `[AFTER-PILOT DATA DECISION — REQUIRED INPUT]`
+- `[LOG RETENTION — REQUIRED INPUT]` (Supabase and Vercel; Vercel plan recorded by the owner as Hobby; no extended log-retention setting recorded)
 - `[ANTHROPIC AI-FEEDBACK DATA HANDLING — REQUIRED INPUT]`
 - `[OPERATOR ACCESS LIST — REQUIRED INPUT]` (optional)
 - `[PRIVACY ADVISER REVIEW DATE — REQUIRED INPUT]`
@@ -23,7 +20,7 @@
 
 **Ethixo pilot — parent/guardian consent**
 
-Ethixo is a practice app with English, Science and Social Science lessons for Primary 5–6 students. This pilot is open to **Primary 6 students only**. Lesson content in this pilot build is sample material. `[ELELET LEGAL ENTITY]` is running a small pilot of about 1–2 weeks with one teacher and at most 10 students, from `[PILOT START DATE]` to `[PILOT END DATE]`. Taking part is optional.
+Ethixo is a practice app with English, Science and Social Science lessons for Primary 5–6 students. This pilot is open to **Primary 6 students only**. Lesson content in this pilot build is sample material. ELELET DIGITAL PTE. LTD. (UEN 202233369W), registered office 101 Cecil Street, #20-11, Tong Eng Building, Singapore 069533, is running a small pilot of about 1–2 weeks with one teacher and at most 10 students, from `[PILOT START DATE]` to `[PILOT END DATE]`. Taking part is optional.
 
 **1. What is stored in the pilot cloud database (Supabase, Singapore region)**
 
@@ -58,7 +55,7 @@ To produce feedback, the app sends your child's written answer, the thinking-hel
 Tell the pilot teacher, who forwards the request to the pilot operator at Elelet, or write to `[ELELET CONTACT EMAIL]`. Elelet will delete your child's pilot database data **within 7 days** of receiving the request, and will confirm through the teacher or by email once done. Deletion removes your child's anonymous account, profile, class membership and stored practice results. It does not remove data on your child's own device. You can clear that by clearing the browser's site data for the pilot address. Please also stop using the pilot link: if your child keeps using it, the app may create a new anonymous identity and begin syncing again. Deletion does not cover provider technical logs or AI-feedback data held by providers (see sections 4 and 5).
 
 **8. How long data is kept**
-For the pilot duration. After the pilot: `[AFTER-PILOT DATA DECISION — REQUIRED INPUT]`.
+For the pilot duration. After the pilot, Elelet will erase all pilot student data.
 
 **9. Consent**
 - ☐ I am the parent/guardian of the student named below and have read this form.
@@ -69,7 +66,7 @@ For the pilot duration. After the pilot: `[AFTER-PILOT DATA DECISION — REQUIRE
 Student first name or nickname (as it will appear in the app): ______________ Level: **P6**
 Parent/guardian name: ______________ Signature: ______________ Date: __________
 
-*Kept by `[ELELET LEGAL ENTITY]` / the teacher, not inside the app.*
+*Kept by ELELET DIGITAL PTE. LTD. / the teacher, not inside the app.*
 
 ---
 
@@ -147,4 +144,4 @@ The pilot runs for about 1–2 weeks, with 1 teacher and a maximum of 10 Primary
 8. **Log it.** Record the date completed and the counts. Keep the log minimal, with no answer content.
 
 **Do not:** delete teachers or classes, touch `main`/Production, or run bulk deletion without separate approval.
-**End of pilot:** `[AFTER-PILOT DATA DECISION — REQUIRED INPUT]`. If the decision is to delete all pilot students, run step 5 per student, with approval.
+**End of pilot:** erase all pilot student data after the pilot. Run step 5 per student, with approval.
