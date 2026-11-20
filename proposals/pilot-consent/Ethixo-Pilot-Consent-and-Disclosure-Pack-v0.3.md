@@ -8,7 +8,7 @@
 - `[PILOT START DATE — REQUIRED INPUT]`
 - `[PILOT END DATE — REQUIRED INPUT]`
 - `[TEACHER NAME / SCHOOL — REQUIRED INPUT]`
-- `[LOG RETENTION — REQUIRED INPUT]` (Supabase and Vercel; Vercel plan recorded by the owner as Hobby; no extended log-retention setting recorded)
+- `[LOG RETENTION — REQUIRED INPUT]` (Supabase and Vercel; Supabase plan Free, Vercel plan Hobby; no extended log-retention setting recorded)
 - `[ANTHROPIC AI-FEEDBACK DATA HANDLING — REQUIRED INPUT]`
 - `[OPERATOR ACCESS LIST — REQUIRED INPUT]` (optional)
 - `[PRIVACY ADVISER REVIEW DATE — REQUIRED INPUT]`
