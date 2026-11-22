@@ -6,21 +6,163 @@
 <meta name="robots" content="noindex">
 <title>Ethixo — Teacher view (pilot)</title>
 <style>
-  :root{--brand:#4b3fd6;--ink:#1f2333;--muted:#6b7086;--border:#e3e5ef;--bg:#f6f7fb;}
+  /* Tokens and teacher-dashboard component rules are copied from index.html (Sharon Lim dashboard) so the pilot dashboard looks the same. */
+  :root{
+    --brand:#00A86B; --brand-dark:#00875A; --brand-deep:#046B4A;
+    --brand-light:#E3F5EC; --brand-light-b:#BFE9D4;
+    --ink:#182420; --muted:#5E6D66;
+    --amber:#C9821F; --amber-bg:#FBF0DE;
+    --bg:#EAEAEA; --card:#FFFFFF; --border:#DBDFDC; --panel:#E2E4E2;
+    --radius:18px; --shadow:0 4px 18px rgba(24,36,32,.07);
+  }
   *{box-sizing:border-box} body{margin:0;font-family:Montserrat,system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);background:var(--bg);}
-  main{max-width:1000px;margin:0 auto;padding:24px 16px;}
+  main{max-width:920px;margin:0 auto;padding:24px 16px;}
   h1{font-size:22px;margin:0 0 4px} .muted{color:var(--muted);font-size:14px}
   .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px;margin:16px 0;}
   input,select{padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit;}
   button{padding:10px 16px;border:0;border-radius:8px;background:var(--brand);color:#fff;font:inherit;font-weight:600;cursor:pointer;}
-  button.link{background:none;color:var(--brand);padding:0;font-weight:500}
-  table{width:100%;border-collapse:collapse;font-size:14px} th,td{text-align:left;padding:8px;border-bottom:1px solid var(--border);}
-  th{cursor:pointer;white-space:nowrap} .code{font-family:ui-monospace,monospace;font-size:18px;letter-spacing:1px;}
+  button.link{background:none;color:var(--brand-deep);padding:0;font-weight:500}
+  button.ghost{background:#fff;color:var(--ink);border:1px solid var(--border);}
+  .code{font-family:ui-monospace,monospace;font-size:18px;letter-spacing:1px;}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  /* ---- copied from index.html ---- */
+.dash-shell{--ds-xs:10px; --ds-sm:20px; --ds-md:30px; --ds-lg:44px; --card-shadow:0 1px 2px rgba(24,36,32,.04),0 10px 28px -10px rgba(24,36,32,.12); --card-radius:22px;}
+.noticed-card-refined{background:linear-gradient(155deg,var(--brand-light),#fff 78%);border:1px solid var(--brand-light-b);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:30px 32px;margin-bottom:var(--ds-md);}
+.t-acard-wrap{display:flex;flex-direction:column;gap:12px;margin-bottom:var(--ds-md);}
+.t-acard{background:#fff;border:1px solid var(--border);border-left:5px solid var(--border);border-radius:14px;padding:18px 20px;box-shadow:var(--card-shadow);}
+.t-acard-new{border-left-color:#C1665A;}
+.t-acard-progress{border-left-color:var(--amber);}
+.t-acard-done{border-left-color:var(--brand-deep);}
+.t-acard-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
+.t-acard-eyebrow{font-size:11.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+.t-astatus2{flex:none;font-size:11.5px;font-weight:800;padding:4px 11px;border-radius:20px;white-space:nowrap;}
+.t-astatus2-new{background:#F7E4E1;color:#9B4A3F;}
+.t-astatus2-progress{background:var(--amber-bg);color:#8a5c14;}
+.t-astatus2-done{background:var(--brand-light);color:var(--brand-deep);}
+.t-astatus2-needs{background:#E3EEFB;color:#1D5A9E;}
+.t-areport-wrap{display:flex;flex-direction:column;gap:14px;margin-bottom:var(--ds-md);}
+.t-areport{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px 20px;box-shadow:var(--card-shadow);}
+.t-areport-class{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+.t-areport-lesson{font-size:16px;font-weight:800;color:var(--ink);margin-top:2px;}
+.t-areport-due{font-size:12.5px;color:var(--muted);margin-top:2px;margin-bottom:12px;}
+.t-areport-rows{border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:9px;}
+.t-areport-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;}
+.t-areport-name{color:var(--ink);font-weight:700;}
+.t-areport-name.live{color:var(--brand-deep);}
+.t-areport-status-frac{display:flex;align-items:center;gap:8px;flex:none;}
+.t-areport-frac{color:var(--muted);font-size:12px;font-weight:700;}
+.t-acard-lesson{font-size:16px;font-weight:800;color:var(--ink);}
+.t-acard-due{font-size:13px;color:var(--muted);margin-top:4px;}
+.noticed-head{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
+.noticed-head .nh-badge{width:48px;height:48px;border-radius:14px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 4px 12px rgba(0,168,107,.3);}
+.noticed-head h3{margin:0;font-size:19px;font-weight:800;color:var(--brand-deep);}
+.noticed-list{display:flex;flex-direction:column;gap:2px;}
+.noticed-item-refined{display:flex;align-items:flex-start;gap:13px;padding:12px 0;font-size:16px;color:var(--muted);line-height:1.5;border-top:1px solid rgba(4,107,74,.09);}
+.noticed-item-refined:first-child{border-top:none;}
+.noticed-item-refined .ni-mark{flex:none;width:26px;height:26px;border-radius:50%;background:var(--brand-light-b);color:var(--brand-deep);font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:1px;}
+.noticed-item-refined.new{color:var(--brand-deep);font-weight:700;}
+.noticed-item-refined.new .ni-mark{background:var(--brand);color:#fff;}
+.noticed-item-refined .ni-badge{flex:none;background:var(--brand);color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.04em;padding:3px 9px;border-radius:20px;margin-left:auto;text-transform:uppercase;}
+.growth-card{border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:26px 24px 24px;border:1px solid var(--border);display:flex;flex-direction:column;gap:2px;}
+.growth-card.tint-green{background:var(--brand-light);border-color:var(--brand-light-b);}
+.growth-card.tint-blue{background:#E3EEFB;border-color:#c7ddf5;}
+.growth-card.tint-amber{background:var(--amber-bg);border-color:#efd6a4;}
+.growth-card .gc-icon{width:56px;height:56px;border-radius:15px;background:rgba(255,255,255,.75);display:flex;align-items:center;justify-content:center;margin-bottom:16px;}
+.growth-card.tint-green .gc-icon{color:var(--brand-deep);}
+.growth-card.tint-blue .gc-icon{color:#1D5A9E;}
+.growth-card.tint-amber .gc-icon{color:#8a5c14;}
+.growth-card .gc-number{font-size:40px;font-weight:800;color:var(--ink);line-height:1;letter-spacing:-.5px;}
+.growth-card .gc-label{font-size:17px;color:var(--ink);font-weight:600;margin:8px 0 18px;line-height:1.35;}
+.growth-card a.gc-view{font-size:14px;font-weight:700;color:var(--brand-deep);text-decoration:none;margin-top:auto;}
+.growth-card a.gc-view:hover{text-decoration:underline;}
+.examready-card-refined{background:linear-gradient(155deg,#FFF9EC,#fff 70%);border:1px solid #f3e3bd;border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:30px 32px;margin-bottom:var(--ds-md);}
+.examready-card-refined .er-head{display:flex;align-items:center;gap:14px;margin-bottom:5px;}
+.examready-card-refined .er-head .er-badge{width:48px;height:48px;border-radius:14px;background:var(--amber);color:#fff;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 4px 12px rgba(201,130,31,.3);}
+.examready-card-refined h3{margin:0;font-size:19px;font-weight:800;color:#8a5c14;}
+.examready-card-refined p.hint{margin:5px 0 20px;color:var(--ink);opacity:.65;font-size:14.5px;}
+.er-row{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;background:rgba(255,255,255,.65);margin-bottom:9px;}
+.er-row .er-icon{flex:none;width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;}
+.er-row .er-icon.icon-EN{color:var(--brand-deep);}
+.er-row .er-icon.icon-SCI{color:#1D5A9E;}
+.er-row .er-icon.icon-SS{color:#8a5c14;}
+.er-row .er-name{flex:1;font-size:15.5px;font-weight:700;color:var(--ink);}
+.er-row .er-count{font-size:20px;font-weight:800;color:#8a5c14;}
+.examready-card-refined a.er-viewall{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:14px 20px;border-radius:13px;font-size:15px;font-weight:700;color:#8a5c14;background:#fff;border:1.5px solid #f0dbae;text-decoration:none;transition:background .12s,border-color .12s;}
+.examready-card-refined a.er-viewall:hover{background:var(--amber-bg);border-color:var(--amber);}
+.t-section-title{margin:var(--ds-lg) 0 14px;font-size:17px;font-weight:800;color:var(--ink);}
+.class-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:var(--ds-lg);}
+.class-tab{border:1.5px solid var(--border);background:#fff;color:var(--muted);border-radius:11px;padding:10px 18px;font-weight:700;font-size:13.5px;cursor:pointer;transition:background .12s,color .12s,border-color .12s;}
+.class-tab:hover{border-color:var(--brand);color:var(--ink);}
+.class-tab.active{background:var(--brand);color:#fff;border-color:var(--brand-dark);}
+.growth-card.tint-purple{background:#EFE9FA;border-color:#D9CBF2;}
+.growth-card.tint-purple .gc-icon{color:#6B4FA0;}
+.t-progress-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--ds-sm);margin-bottom:var(--ds-md);}
+@media(max-width:900px){.t-progress-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:480px){.t-progress-grid{grid-template-columns:1fr;}}
+.t-encourage-wrap{margin-bottom:var(--ds-md);}
+.t-encourage-hint{margin:0 0 14px;color:var(--muted);font-size:14px;}
+.t-encourage-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--ds-sm);}
+@media(max-width:760px){.t-encourage-grid{grid-template-columns:1fr;}}
+.t-encourage-card{border-radius:var(--card-radius);box-shadow:var(--card-shadow);border:1px solid var(--border);padding:20px 20px 18px;cursor:pointer;transition:transform .12s,box-shadow .12s;background:#fff;}
+.t-encourage-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(24,36,32,.12);}
+.t-encourage-name{font-size:16px;font-weight:800;color:var(--ink);margin-bottom:6px;}
+.t-encourage-status{font-size:12px;font-weight:700;color:var(--brand-deep);background:var(--brand-light);display:inline-block;padding:3px 10px;border-radius:20px;margin-bottom:10px;}
+.t-encourage-focus{font-size:14px;color:var(--muted);}
+.t-insights-card{background:linear-gradient(155deg,#E3EEFB,#fff 70%);border:1px solid #c7ddf5;border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:30px 32px;margin-bottom:var(--ds-md);}
+.t-insights-card .t-head{display:flex;align-items:center;gap:14px;margin-bottom:5px;}
+.t-insights-card .t-badge{width:48px;height:48px;border-radius:14px;background:#1D5A9E;color:#fff;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 4px 12px rgba(29,90,158,.3);}
+.t-insights-card h3{margin:0;font-size:19px;font-weight:800;color:#1D5A9E;}
+.t-insights-card p.hint{margin:5px 0 20px;color:var(--ink);opacity:.65;font-size:14.5px;}
+.t-misc-row{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;border-radius:13px;background:rgba(255,255,255,.65);margin-bottom:9px;}
+.t-misc-title{font-size:14.5px;font-weight:700;color:var(--ink);}
+.t-misc-meta{font-size:13px;font-weight:700;color:#1D5A9E;white-space:nowrap;margin-left:14px;}
+.t-er-counts{display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
+.t-er-counts .t-er-frac{font-size:16px;font-weight:800;color:#8a5c14;white-space:nowrap;}
+.t-er-counts .t-er-frac b{font-size:20px;font-weight:800;}
+.t-er-counts .t-er-caption{font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap;}
+.t-detail-row{display:flex;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid var(--border);font-size:15px;}
+.t-detail-row .t-detail-label{color:var(--muted);font-weight:600;}
+.t-detail-row .t-detail-val{color:var(--ink);font-weight:700;text-align:right;}
+.t-workspace-context{margin-bottom:16px;}
+.t-workspace-chip{display:inline-flex;align-items:center;gap:8px;background:var(--panel);color:var(--muted);font-weight:700;font-size:13px;padding:7px 14px;border-radius:20px;}
+.teacher-hero-card{position:relative;border-radius:22px;overflow:hidden;margin-bottom:20px;box-shadow:0 2px 8px rgba(24,36,32,.06),0 20px 40px -16px rgba(14,58,38,.22);background:#EAF3EC;height:400px;}
+.teacher-hero-img-wrap{position:absolute;inset:0;}
+.teacher-hero-img{display:block;width:100%;height:100%;object-fit:cover;object-position:center 50%;}
+.teacher-hero-scrim{position:absolute;inset:0;background:linear-gradient(115deg,rgba(255,255,255,.84) 0%,rgba(255,255,255,.62) 16%,rgba(255,255,255,.22) 28%,rgba(255,255,255,0) 40%);pointer-events:none;}
+.teacher-hero-text{position:absolute;left:5%;top:12%;max-width:27%;}
+.teacher-hero-text svg{display:block;margin-bottom:10px;}
+.teacher-hero-text h1{margin:0 0 7px;font-size:21px;font-weight:800;color:var(--ink);letter-spacing:-.3px;line-height:1.22;}
+.teacher-hero-text p{margin:0;color:#33433d;font-size:13.5px;font-weight:600;line-height:1.4;}
+@media(max-width:820px){.teacher-hero-card{height:320px;}.teacher-hero-text{max-width:32%;top:10%;}.teacher-hero-text h1{font-size:18px;}.teacher-hero-text p{font-size:12.5px;}}
+@media(max-width:560px){
+    .teacher-hero-card{height:auto;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(24,36,32,.06),0 12px 26px -14px rgba(14,58,38,.16);}
+    .teacher-hero-text{position:static;max-width:none;padding:16px 18px;order:1;background:#fff;display:flex;align-items:center;gap:13px;}
+    .teacher-hero-text svg{flex:none;margin-bottom:0;}
+    .teacher-hero-copy{min-width:0;}
+    .teacher-hero-text h1{font-size:16.5px;}
+    .teacher-hero-text p{font-size:12px;}
+    .teacher-hero-img-wrap{position:relative;height:150px;order:2;}
+    .teacher-hero-scrim{display:none;}
+    .teacher-hero-img{object-position:center 55%;}
+  }
+.growth-card.t-clickable{cursor:pointer;transition:transform .12s,box-shadow .12s;}
+.growth-card.t-clickable:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(24,36,32,.12);}
+.t-tap-hint{font-size:12px;font-weight:700;color:var(--brand-deep);margin-top:10px;opacity:.85;}
+.t-insight-banner{background:var(--brand-light);border:1px solid var(--brand-light-b);border-radius:14px;padding:16px 18px;font-size:14.5px;font-weight:600;color:var(--brand-deep);margin-bottom:20px;}
+  /* ---- pilot-only additions (status chips, student rows, how-it-works) ---- */
+  .t-chip{display:inline-block;font-size:12px;font-weight:700;border-radius:20px;padding:3px 10px;background:var(--brand-light);color:var(--brand-deep);}
+  .t-chip.warn{background:#FCE8E4;color:#9c3a28;} .t-chip.amber{background:var(--amber-bg);color:#8a5c14;} .t-chip.grey{background:#ECEEED;color:var(--muted);}
+  .t-chip.blue{background:#E3EEFB;color:#1D5A9E;}
+  .t-student-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 16px;border-radius:14px;background:#fff;border:1px solid var(--border);margin-bottom:8px;cursor:pointer;}
+  .t-student-row:hover{border-color:var(--brand);}
+  .t-student-row .nm{flex:1 1 150px;font-weight:800;font-size:15px;} .t-student-row .mt{font-size:12.5px;color:var(--muted);font-weight:600;}
+  .t-rules{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 18px;margin-top:var(--ds-md);font-size:13.5px;color:var(--muted);}
+  .t-rules summary{cursor:pointer;font-weight:700;color:var(--ink);} .t-rules li{margin:4px 0;}
 </style>
 </head>
 <body>
 <main id="app"><p class="muted">Loading…</p></main>
+<script src="assets/pilot-teacher-insights.js"></script>
 <script>
 /* ETHIXO-TEACHER-CONFIG-BEGIN
    PLACEHOLDERS ONLY in committed code. Real values are filled in at request time by api/pilot-app.js, and only on an
@@ -30,15 +172,15 @@ const SUPABASE_PUBLISHABLE_KEY = "__SET_ME__";
 const DB_SYNC_ALLOWED_HOSTS = [];
 /* ETHIXO-TEACHER-CONFIG-END */
 
-/* Pilot teacher view: READ-ONLY.
+/* Pilot teacher dashboard: READ-ONLY.
    - Separate sign-in (email link) and separate session storage from the student app.
-   - Reads ONLY: own profile, own classes (RLS), and teacher_attempt_summary() — scores, counts, timestamps,
-     thinking-help flag. No raw attempts, answers, feedback or ScholarVault content exist in this view, and RLS gives
+   - Reads ONLY: own profile, own classes and class_members/profiles of own class (RLS), teacher_attempt_summary() — scores, counts,
+     timestamps, thinking-help flag — and the static assets/pilot-lesson-meta.json (lesson titles + max marks, no questions/answers). No raw attempts, answers, feedback or ScholarVault content exist in this view, and RLS gives
      teachers no access to those tables.
    - Writes ONLY: create_my_profile('teacher', name) once (unapproved by default; approval is an operator step). */
 const LIB = "assets/vendor/supabase-js-2.117.2.umd.js";
 const app = document.getElementById("app");
-let client = null, view = { classes: [], classId: null, rows: [], sort: "student", msg: "" };
+let client = null, view = { classes: [], classId: null, rows: [], members: [], page: "dash", studentId: null, msg: "" };
 
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function show(html){ app.innerHTML = html; }
@@ -105,60 +247,162 @@ async function createTeacher(){
   route();
 }
 
+const DASH_ICON_PATHS = {
+  leaf: '<path d="M12 21c-4.2-1-7.3-4.3-7.3-9.3 0-4.3 3.2-8.4 9.6-9.5 3.1 5.3 3.1 10.6 0 14.9-1 1.4-2 2.4-2.3 3.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M7.8 15.2c2.2-1.1 4.3-3.3 5.4-6.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>',
+  bulb: '<path d="M9 18.5h6M10 21.3h4M12 3a6.2 6.2 0 0 0-3.6 11.3c.6.45 1 1.2 1 2V17h5.2v-.4c0-.8.4-1.55 1-2A6.2 6.2 0 0 0 12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
+  brain: '<path d="M9.3 4.6c-1.9 0-3.2 1.3-3.3 3.1-1.4.5-2.3 1.8-2.3 3.2 0 1 .4 1.9 1.1 2.5-.4.6-.7 1.3-.7 2 0 1.6 1.2 3 2.8 3.2.3 1.5 1.6 2.6 3.1 2.6H12V6.6c0-1.2-1.1-2-2.7-2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M14.7 4.6c1.9 0 3.2 1.3 3.3 3.1 1.4.5 2.3 1.8 2.3 3.2 0 1-.4 1.9-1.1 2.5.4.6.7 1.3.7 2 0 1.6-1.2 3-2.8 3.2-.3 1.5-1.6 2.6-3.1 2.6H12V6.6c0-1.2 1.1-2 2.7-2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
+  target: '<circle cx="12" cy="12" r="8.6" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="12" cy="12" r="5.1" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/>',
+  eye: '<path d="M2.3 12S6 5.3 12 5.3 21.7 12 21.7 12 18 18.7 12 18.7 2.3 12 2.3 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="none"/><circle cx="12" cy="12" r="3.1" stroke="currentColor" stroke-width="1.8" fill="none"/>',
+  star: '<path d="M12 2.5l2.7 6.4 6.9.6-5.2 4.6 1.6 6.8L12 17.6 5.9 20.9l1.6-6.8-5.2-4.6 6.9-.6L12 2.5Z" fill="currentColor"/>',
+  book: '<path d="M4 5.6c1.9-1.1 4.2-1.1 6.2 0v12.8c-2-1.1-4.3-1.1-6.2 0V5.6Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/><path d="M20 5.6c-1.9-1.1-4.2-1.1-6.2 0v12.8c2-1.1 4.3-1.1 6.2 0V5.6Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/>',
+  flask: '<path d="M10 3.3h4M10 3.3v6.8L5.7 18a2 2 0 0 0 1.8 2.9h9c1.5 0 2.5-1.6 1.8-2.9L14 10.1V3.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M8.2 15.3h7.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  globe: '<circle cx="12" cy="12" r="8.6" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M3.4 12h17.2M12 3.4c2.6 2.3 4 5.5 4 8.6s-1.4 6.3-4 8.6c-2.6-2.3-4-5.5-4-8.6s1.4-6.3 4-8.6Z" stroke="currentColor" stroke-width="1.4" fill="none"/>',
+  arrow: '<path d="M4 12h15M13 6l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
+};
+function teacherAvatar(size){
+  size = size||40;
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 100 100">'+
+    '<rect width="100" height="100" rx="20" fill="#E3F5EC"/>'+
+    '<path d="M16 100 L16 82 Q50 70 84 82 L84 100 Z" fill="#00A86B"/>'+
+    '<path d="M40 80 Q50 86 60 80" fill="none" stroke="#046B4A" stroke-width="3" stroke-linecap="round"/>'+
+    '<rect x="43" y="63" width="14" height="16" fill="#F0BE8E"/>'+
+    '<circle cx="50" cy="43" r="26" fill="#F5CA96"/>'+
+    '<path d="M22 46 Q20 14 50 13 Q80 14 78 46 Q78 60 74 66 Q76 46 68 38 Q60 46 50 34 Q40 46 32 38 Q24 46 26 66 Q22 60 22 46Z" fill="#2b1c12"/>'+
+    '<circle cx="41" cy="44" r="3" fill="#241a10"/>'+
+    '<circle cx="59" cy="44" r="3" fill="#241a10"/>'+
+    '<path d="M39 54 Q50 63 61 54" stroke="#8a4b1f" stroke-width="3" fill="none" stroke-linecap="round"/>'+
+    '<circle cx="33" cy="51" r="4.5" fill="#F4A98C" opacity="0.4"/>'+
+    '<circle cx="67" cy="51" r="4.5" fill="#F4A98C" opacity="0.4"/>'+
+  '</svg>';
+}
+function dicon(name, px){ return '<svg width="'+px+'" height="'+px+'" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'+DASH_ICON_PATHS[name]+'</svg>'; }
+
+/* ---- Pilot Teacher Dashboard: same layout/information architecture as the Sharon Lim demo dashboard in index.html,
+   fed ONLY by teacher_attempt_summary() + class roster + lesson-meta (titles/marks). Signal rules: assets/pilot-teacher-insights.js ---- */
+let META = null;
 async function dashboard(profile){
   const c = await client.from("classes").select("id,name,join_code,created_at").order("created_at");
   view.classes = c.error ? [] : (c.data || []);
   if (!view.classId && view.classes.length) view.classId = view.classes[0].id;
-  view.profile = profile;
+  view.profile = profile; view.page = "dash"; view.studentId = null;
+  if (!META) { try { const r = await fetch("assets/pilot-lesson-meta.json"); META = r.ok ? await r.json() : {}; } catch (e) { META = {}; } }
   await loadSummary();
 }
 async function loadSummary(){
-  view.rows = []; view.msg = "";
+  view.rows = []; view.members = []; view.msg = "";
   if (view.classId) {
     const r = await client.rpc("teacher_attempt_summary", { p_class_id: view.classId });
     if (r.error) view.msg = "Could not load progress. Please refresh.";
-    else view.rows = aggregate(r.data || []);
+    else view.rows = r.data || [];
+    // roster so students who have joined but not practised yet still appear (RLS: class_members + profiles of own class only)
+    try {
+      const m = await client.from("class_members").select("student_id").eq("class_id", view.classId);
+      const ids = (m.data || []).map(x => x.student_id);
+      if (ids.length) { const p = await client.from("profiles").select("id,display_name").in("id", ids); view.members = (p.data || []).map(x => ({ student_id: x.id, display_name: x.display_name })); }
+    } catch (e) { view.members = []; }
   }
+  view.ins = PilotInsights.compute(view.rows, view.members, META || {}, Date.now());
   renderDashboard();
 }
-// One row per student + lesson, built only from the summary function's aggregated fields.
-function aggregate(rows){
-  const m = new Map();
-  for (const r of rows) {
-    const k = r.student_id + "|" + r.level + "|" + r.subject_key + "|" + r.lesson_id;
-    let g = m.get(k);
-    if (!g) { g = { student: r.display_name, lesson: r.level + " " + r.subject_key + " · " + r.lesson_id, questions: 0, attempts: 0, latestAt: null, latestScore: null, best: null, thinking: false }; m.set(k, g); }
-    g.questions += 1; g.attempts += Number(r.attempt_count) || 0;
-    if (r.best_score != null && (g.best == null || Number(r.best_score) > g.best)) g.best = Number(r.best_score);
-    if (r.latest_at != null && (g.latestAt == null || Number(r.latest_at) > g.latestAt)) { g.latestAt = Number(r.latest_at); g.latestScore = r.latest_score == null ? null : Number(r.latest_score); }
-    g.thinking = g.thinking || r.used_thinking === true;
-  }
-  return Array.from(m.values());
-}
-function setSort(k){ view.sort = k; renderDashboard(); }
-function pickClass(id){ view.classId = id; loadSummary(); }
+function pickClass(id){ view.classId = id; view.page = "dash"; loadSummary(); }
+function openStudent(id){ view.page = "student"; view.studentId = id; renderDashboard(); window.scrollTo(0, 0); }
+function backToDash(){ view.page = "dash"; renderDashboard(); }
 function fmtDate(ms){ if (ms == null) return "–"; const d = new Date(ms); return isNaN(d) ? "–" : d.toLocaleString("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
+function chipClass(s){ return s.performance === "Doing well" ? "" : s.performance === "May need attention" ? "warn" : s.performance === "Making progress" ? "blue" : s.performance === "Just getting started" ? "amber" : "grey"; }
+function statusChips(s){ return '<span class="t-chip ' + chipClass(s) + '">' + esc(s.performance) + '</span>' + (s.thinkingHeavy ? ' <span class="t-chip amber">Relies on Thinking Help</span>' : ''); }
+function studentMeta(s){
+  if (!s.questions) return 'Joined · no practice yet';
+  return s.questions + ' question' + (s.questions === 1 ? '' : 's') + ' · ' + s.lessonsPractised + ' lesson' + (s.lessonsPractised === 1 ? '' : 's') +
+    (s.avgPct != null ? ' · best-attempt avg ' + s.avgPct + '%' : '') + ' · Thinking Help ' + s.thinkingQs + '/' + s.questions + ' · last active ' + fmtDate(s.lastAt);
+}
+function encourageCard(s){
+  const f = s.focusLesson;
+  return '<div class="t-encourage-card" onclick="openStudent(\'' + esc(s.id) + '\')"><div class="t-encourage-name">' + esc(s.name) + '</div>' +
+    '<div class="t-encourage-status">' + esc(s.performance) + (s.thinkingHeavy ? ' · Thinking Help' : '') + '</div>' +
+    '<div class="t-encourage-focus">' + esc(f ? f.title : studentMeta(s)) + '</div></div>';
+}
 
 function renderDashboard(){
   const cls = view.classes.find(c => c.id === view.classId);
-  const rows = view.rows.slice().sort((a, b) =>
-    view.sort === "lesson" ? a.lesson.localeCompare(b.lesson) || a.student.localeCompare(b.student)
-    : view.sort === "recent" ? (b.latestAt || 0) - (a.latestAt || 0)
-    : a.student.localeCompare(b.student) || a.lesson.localeCompare(b.lesson));
   const picker = view.classes.length > 1
-    ? '<select onchange="pickClass(this.value)">' + view.classes.map(c => '<option value="' + esc(c.id) + '"' + (c.id === view.classId ? " selected" : "") + '>' + esc(c.name) + '</option>').join("") + '</select>'
-    : "";
-  let body;
-  if (!view.classes.length) body = '<div class="card"><p>No class yet. Ethixo will set up your class and you will see its class code here.</p></div>';
-  else body = '<div class="card"><div class="row" style="justify-content:space-between"><div><b>' + esc(cls ? cls.name : "") + '</b> ' + picker +
-      '</div><div>Class code for students: <span class="code">' + esc(cls ? cls.join_code : "") + '</span></div></div></div>' +
-    '<div class="card">' + (view.msg ? '<p class="muted">' + esc(view.msg) + '</p>' : "") +
-    (rows.length ? '<table><thead><tr><th onclick="setSort(\'student\')">Student</th><th onclick="setSort(\'lesson\')">Lesson</th><th>Questions attempted</th><th>Attempts</th><th>Latest score</th><th>Best score</th><th>Used thinking help</th><th onclick="setSort(\'recent\')">Last activity</th></tr></thead><tbody>' +
-      rows.map(r => '<tr><td>' + esc(r.student) + '</td><td>' + esc(r.lesson) + '</td><td>' + r.questions + '</td><td>' + r.attempts + '</td><td>' + (r.latestScore == null ? "–" : esc(r.latestScore)) +
-        '</td><td>' + (r.best == null ? "–" : esc(r.best)) + '</td><td>' + (r.thinking ? "Yes" : "–") + '</td><td>' + fmtDate(r.latestAt) + '</td></tr>').join("") + '</tbody></table>'
-      : '<p class="muted">No attempts yet.</p>') +
-    '<p class="muted" style="margin-top:12px">Read-only. Shows scores and activity only — students\' written answers are never uploaded. <button class="link" onclick="loadSummary()">Refresh</button></p></div>';
-  show('<div class="row" style="justify-content:space-between"><div><h1>Teacher view</h1><p class="muted">' + esc(view.profile.display_name) + ' · pilot</p></div>' + signOutLink() + '</div>' + body);
+    ? '<select onchange="pickClass(this.value)">' + view.classes.map(c => '<option value="' + esc(c.id) + '"' + (c.id === view.classId ? " selected" : "") + '>' + esc(c.name) + '</option>').join("") + '</select>' : "";
+  const top = '<div class="row" style="justify-content:space-between"><div class="muted">' + esc(view.profile.display_name) + ' · pilot</div>' + signOutLink() + '</div>';
+  if (!view.classes.length) return show(top + '<div class="card"><p>No class yet. Ethixo will set up your class and you will see its class code here.</p></div>');
+  const d = view.ins;
+  if (view.page === "student") {
+    const s = d.students.find(x => x.id === view.studentId);
+    if (s) return show(top + studentDetail(s, d));
+  }
+  const heroSub = d.joined === 0 ? "Share the class code below to get your students started."
+    : d.active + " of " + d.joined + " student" + (d.joined === 1 ? "" : "s") + " practising so far in " + (cls ? cls.name : "your class") + ".";
+  const progress = [
+    { icon: "leaf", tint: "green", val: d.joined, label: "Students joined" },
+    { icon: "bulb", tint: "blue", val: d.active, label: "Students practising" },
+    { icon: "star", tint: "amber", val: d.totals.full + " / " + d.totals.scored, label: "Full-marks answers (best attempts)" },
+    { icon: "brain", tint: "purple", val: d.totals.thinkingQs + " / " + d.totals.questions, label: "Questions where Thinking Help was used" },
+  ].map(c => '<div class="growth-card tint-' + c.tint + '"><div class="gc-icon">' + dicon(c.icon, 26) + '</div><div class="gc-number">' + esc(c.val) + '</div><div class="gc-label">' + esc(c.label) + '</div></div>').join("");
+  const noticed = d.noticed.length ? d.noticed.map(n => '<div class="noticed-item-refined"><span class="ni-mark">✓</span><span>' + esc(n) + '</span></div>').join("")
+    : '<div class="noticed-item-refined"><span class="ni-mark">✓</span><span>Nothing to show yet. Insights appear as students practise.</span></div>';
+  const attn = d.attention.length ? d.attention.map(encourageCard).join("") : '<p class="qmeta muted">No one flagged right now.</p>';
+  const well = d.doingWell.length ? d.doingWell.map(encourageCard).join("") : '<p class="muted">No one in this group yet.</p>';
+  const all = d.students.map(s => '<div class="t-student-row" onclick="openStudent(\'' + esc(s.id) + '\')"><span class="nm">' + esc(s.name) + '</span>' + statusChips(s) + '<span class="mt" style="flex-basis:100%">' + esc(studentMeta(s)) + '</span></div>').join("");
+  const lessonRows = d.lessons.length ? d.lessons.map(l => '<div class="t-misc-row"><span class="t-misc-title">' + esc(l.title) + '<br><span class="muted">' + esc(l.subject) + '</span></span><span class="t-misc-meta">' +
+      l.students + ' student' + (l.students === 1 ? '' : 's') + (l.avgPct != null ? ' · avg ' + l.avgPct + '%' : '') + (l.struggling ? ' · ' + l.struggling + ' struggling' : '') + '</span></div>').join("")
+    : '<p class="muted">No lessons practised yet.</p>';
+  const er = d.examReady.length ? d.examReady.map(r => '<div class="er-row"><span class="er-name">' + esc(r.label) + '</span><span class="t-er-counts"><span class="t-er-frac"><b>' + r.full + '</b> / ' + r.scored + '</span><span class="t-er-caption">full-marks answers</span></span></div>').join("")
+    : '<p class="muted">No scored answers yet.</p>';
+  const R = d.rules;
+  show(top +
+    '<div class="dash-shell">' +
+    '<div class="teacher-hero-card"><div class="teacher-hero-img-wrap"><img class="teacher-hero-img" src="assets/ethixo_teacher_hero.webp" width="1774" height="887" alt=""><div class="teacher-hero-scrim"></div></div>' +
+      '<div class="teacher-hero-text">' + teacherAvatar(40) + '<div class="teacher-hero-copy"><h1>Hello, ' + esc(view.profile.display_name) + '!</h1><p>' + esc(heroSub) + '</p></div></div></div>' +
+    '<div class="card" style="margin-top:0"><div class="row" style="justify-content:space-between"><div><b>' + esc(cls.name) + '</b> ' + picker + '</div><div>Class code for students: <span class="code">' + esc(cls.join_code) + '</span></div></div></div>' +
+    (view.msg ? '<p class="muted">' + esc(view.msg) + ' <button class="link" onclick="loadSummary()">Retry</button></p>' : '') +
+    '<h3 class="t-section-title">Class progress — ' + esc(cls.name) + '</h3><div class="t-progress-grid">' + progress + '</div>' +
+    '<div class="noticed-card-refined"><div class="noticed-head"><span class="nh-badge">' + dicon("eye", 24) + '</span><h3>Ethixo Noticed</h3></div><div class="noticed-list">' + noticed + '</div></div>' +
+    '<div class="t-encourage-wrap"><h3 class="t-section-title">May need attention</h3><p class="t-encourage-hint">Students scoring under 40% on their best attempts, or relying on Thinking Help for at least half of their questions.</p><div class="t-encourage-grid">' + attn + '</div></div>' +
+    '<div class="t-encourage-wrap"><h3 class="t-section-title">Doing well</h3><p class="t-encourage-hint">Students scoring 70% or more on their best attempts (after at least ' + R.minQuestions + ' questions).</p><div class="t-encourage-grid">' + well + '</div></div>' +
+    '<h3 class="t-section-title">All students</h3>' + (all || '<p class="muted">No students have joined yet.</p>') +
+    '<div class="t-insights-card"><div class="t-head"><span class="t-badge">' + dicon("bulb", 24) + '</span><h3>Lessons students are practising</h3></div><p class="hint">Lessons with a student struggling (under 40% after at least ' + R.lessonMinQuestions + ' questions) are listed first.</p>' + lessonRows + '</div>' +
+    '<div class="examready-card-refined"><div class="er-head"><span class="er-badge">' + dicon("star", 24) + '</span><h3>Full-marks answers</h3></div><p class="hint">Of the answers scored so far, how many reached full marks on the best attempt.</p>' + er + '</div>' +
+    '<details class="t-rules"><summary>How these signals work</summary><ul>' +
+      '<li>Score = a student\'s best attempt on each question ÷ the marks available. Averages use best attempts only.</li>' +
+      '<li>Doing well: ≥ ' + Math.round(R.doingWell * 100) + '% · Making progress: ' + Math.round(R.makingProgress * 100) + '–' + (Math.round(R.doingWell * 100) - 1) + '% · May need attention: &lt; ' + Math.round(R.makingProgress * 100) + '%. Fewer than ' + R.minQuestions + ' questions attempted = Just getting started.</li>' +
+      '<li>Relies on Thinking Help: Thinking Help used on at least ' + Math.round(R.thinkingShare * 100) + '% of ≥ ' + R.minQuestions + ' attempted questions.</li>' +
+      '<li>Struggling in a lesson: ≥ ' + R.lessonMinQuestions + ' questions attempted there with an average under ' + Math.round(R.lessonStruggle * 100) + '%. Active recently: within ' + R.recentDays + ' days.</li>' +
+      '<li>These are simple counts of scores and activity, not a judgement of ability. Ethixo does not see or keep students\' written answers, feedback or Thinking Help conversations.</li></ul></details>' +
+    '<p class="muted" style="margin-top:14px">Read-only. <button class="link" onclick="loadSummary()">Refresh</button></p>' +
+    '</div>');
+}
+
+function studentDetail(s, d){
+  const rows = [
+    ["Status", statusChips(s)],
+    ["Questions attempted", s.questions], ["Attempts in total", s.attempts], ["Lessons practised", s.lessonsPractised],
+    ["Average score (best attempts)", s.avgPct == null ? "–" : s.avgPct + "%"],
+    ["Full-marks answers", s.scored ? s.fullMarks + " of " + s.scored : "–"],
+    ["Thinking Help used on", s.questions ? s.thinkingQs + " of " + s.questions + " questions" : "–"],
+    ["Retried questions", s.retried + (s.retriedFull ? " (" + s.retriedFull + " reached full marks)" : "")],
+    ["Last active", fmtDate(s.lastAt)],
+  ].map(r => '<div class="t-detail-row"><span class="t-detail-label">' + r[0] + '</span><span class="t-detail-val">' + (typeof r[1] === "string" && r[1].indexOf("<span") === 0 ? r[1] : esc(r[1])) + '</span></div>').join("");
+  const notes = [];
+  if (!s.questions) notes.push("Joined the class but has not practised yet.");
+  else {
+    if (s.doingWell) notes.push("Scoring well: " + s.avgPct + "% of the marks on best attempts.");
+    if (s.needsAttention) notes.push("Scoring " + s.avgPct + "% of the marks on best attempts, which may need attention.");
+    if (s.performance === "Just getting started") notes.push("Only " + s.questions + " question" + (s.questions === 1 ? "" : "s") + " attempted so far; not enough to read a pattern yet.");
+    if (s.thinkingHeavy) notes.push("Used Thinking Help on " + s.thinkingQs + " of " + s.questions + " questions.");
+    if (s.retriedFull) notes.push("Reached full marks after retrying on " + s.retriedFull + " question" + (s.retriedFull === 1 ? "" : "s") + ".");
+    if (s.focusLesson && s.focusLesson.struggling) notes.push("Struggling in: " + s.focusLesson.title + ".");
+  }
+  const noticed = (notes.length ? notes : ["Nothing to show yet."]).map(n => '<div class="noticed-item-refined"><span class="ni-mark">✓</span><span>' + esc(n) + '</span></div>').join("");
+  const lessons = s.lessons.length ? s.lessons.map(l => '<div class="t-misc-row"><span class="t-misc-title">' + esc(l.title) + '<br><span class="muted">' + esc(l.subject) + '</span></span><span class="t-misc-meta">' +
+      l.questions + ' q' + (l.avgRatio != null ? ' · ' + Math.round(l.avgRatio * 100) + '%' : '') + (l.thinkingQs ? ' · Thinking Help ' + l.thinkingQs : '') + (l.struggling ? ' · struggling' : '') + '</span></div>').join("")
+    : '<p class="muted">No lessons practised yet.</p>';
+  return '<div class="dash-shell"><div class="card"><h1>' + esc(s.name) + '</h1>' + rows +
+    '<div class="noticed-card-refined" style="margin-top:22px"><div class="noticed-head"><span class="nh-badge">' + dicon("eye", 24) + '</span><h3>Ethixo Noticed</h3></div><div class="noticed-list">' + noticed + '</div></div>' +
+    '<div class="t-insights-card" style="margin-top:22px"><div class="t-head"><span class="t-badge">' + dicon("bulb", 24) + '</span><h3>Lessons practised</h3></div><p class="hint">Scores and activity only. No answers, feedback or Thinking Help conversations are shown.</p>' + lessons + '</div>' +
+    '<button class="ghost" style="margin-top:22px" onclick="backToDash()">Back to dashboard</button></div></div>';
 }
 
 boot();

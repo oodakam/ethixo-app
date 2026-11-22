@@ -1,7 +1,7 @@
 // Targeted test of the pilot teacher page (teacher.html served through api/pilot-app.js). Browser + mocked Supabase network. No real project is contacted.
 // Run: node tests/pilot-teacher-view.test.js   (needs playwright-core and a Chromium: CHROMIUM_PATH)
 const fs = require("fs"), path = require("path"), http = require("http");
-const { chromium } = require("playwright-core");
+let chromium; try { ({ chromium } = require("playwright")); } catch (_e) { ({ chromium } = require("playwright-core")); }
 const root = path.join(__dirname, "..");
 const exe = process.env.CHROMIUM_PATH || "/opt/pw-browsers/chromium-1243/chrome-linux64/chrome";
 let passed = 0, failed = 0; const assert = (c, m) => { if(c){ passed++; console.log("  PASS:", m); } else { failed++; console.log("  FAIL:", m); } };
@@ -22,7 +22,7 @@ const FAKE = "https://fakeref.supabase.co", KEY = "sb_publishable_TESTONLY";
     const f = path.join(root, u.pathname); if(f.startsWith(root) && fs.existsSync(f) && fs.statSync(f).isFile()){ res.setHeader("content-type", f.endsWith(".js") ? "application/javascript" : "text/plain"); res.end(fs.readFileSync(f)); } else { res.statusCode = 404; res.end(); }
   });
   await new Promise(r => server.listen(0, "127.0.0.1", r)); const port = server.address().port;
-  const browser = await chromium.launch({ executablePath: exe, args: ["--no-sandbox"] });
+  const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH, args: ["--no-sandbox"] } : {});
 
   async function open(opts){
     const ctx = await browser.newContext(); const page = await ctx.newPage(); const reqs = []; const errors = [];
@@ -33,6 +33,8 @@ const FAKE = "https://fakeref.supabase.co", KEY = "sb_publishable_TESTONLY";
       const j = (code, body) => route.fulfill({ status: code, contentType: "application/json", headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" }, body: JSON.stringify(body) });
       if(rq.method() === "OPTIONS") return j(200, {});
       if(u.pathname === "/auth/v1/otp") return j(200, {});
+      if(u.pathname === "/rest/v1/class_members"){ const cid = (u.search.match(/class_id=eq\.([^&]+)/)||[])[1]; return j(200, (opts.roster || []).filter(m => m.class_id === cid).map(m => ({ student_id: m.id }))); }
+      if(u.pathname === "/rest/v1/profiles" && /id=in\./.test(u.search)){ const ids = (decodeURIComponent(u.search).match(/id=in\.\(([^)]*)\)/)||[])[1]||"".replace(/"/g,"").split(","); return j(200, (opts.roster || []).filter(m => ids.indexOf(m.id) !== -1).map(m => ({ id: m.id, display_name: m.name }))); }
       if(u.pathname === "/rest/v1/profiles"){ return j(200, opts.profile ? [opts.profile] : []); }   // supabase-js maybeSingle() reads an array and takes the first row
       if(u.pathname === "/rest/v1/rpc/create_my_profile"){ opts.created = true; opts.profile = { id: "u1", role: "teacher", display_name: "Ms Tan", is_approved: false }; return j(200, opts.profile); }
       if(u.pathname === "/rest/v1/classes") return j(200, opts.classes || []);
@@ -78,13 +80,14 @@ const FAKE = "https://fakeref.supabase.co", KEY = "sb_publishable_TESTONLY";
   const C1 = "c1-uuid", C2 = "c2-uuid";
   const S = (o) => Object.assign({ student_id: "s1", display_name: "Ava", class_id: C1, level: "P6", subject_key: "EN", lesson_id: "L1", q_idx: 0, attempt_count: 2, latest_at: 3000, latest_score: 3, best_score: 3, used_thinking: true }, o);
   const summary = [S({}), S({ q_idx: 1, attempt_count: 1, latest_at: 2000, latest_score: 1, best_score: 1, used_thinking: false }), S({ student_id: "s2", display_name: "Ben", lesson_id: "L2", attempt_count: 1, latest_at: 4000, latest_score: 2, best_score: 2, used_thinking: false }), S({ class_id: C2, student_id: "s3", display_name: "Cara", attempt_count: 4, latest_at: 5000, latest_score: 1, best_score: 2, used_thinking: false })];
-  { const o = { session: true, profile: { id: "u1", role: "teacher", display_name: "Ms Tan", is_approved: true }, classes: [{ id: C1, name: "Class One", join_code: "ABCD2345", created_at: "x" }, { id: C2, name: "Class Two", join_code: "WXYZ6789", created_at: "y" }], summary };
+  { const o = { session: true, profile: { id: "u1", role: "teacher", display_name: "Ms Tan", is_approved: true }, classes: [{ id: C1, name: "Class One", join_code: "ABCD2345", created_at: "x" }, { id: C2, name: "Class Two", join_code: "WXYZ6789", created_at: "y" }], summary, roster: [{ id: "s1", name: "Ava", class_id: C1 }, { id: "s2", name: "Ben", class_id: C1 }, { id: "s0", name: "Dee", class_id: C1 }, { id: "s3", name: "Cara", class_id: C2 }] };
     const t = await open(o); const tx = await text(t.page);
     assert(/Class One/.test(tx) && /ABCD2345/.test(tx), "class name and class code shown");
-    for(const h of ["Student", "Lesson", "Questions attempted", "Attempts", "Latest score", "Best score", "Used thinking help", "Last activity"]) assert(tx.indexOf(h) !== -1, "column: " + h);
-    const rows = await t.page.$$eval("tbody tr", trs => trs.map(tr => Array.from(tr.children).map(td => td.innerText)));
-    assert(rows.length === 2 && rows[0][0] === "Ava" && rows[0][2] === "2" && rows[0][3] === "3" && rows[0][4] === "3" && rows[0][5] === "3" && rows[0][6] === "Yes", "Ava / L1: 2 questions, 3 attempts, latest 3, best 3, thinking Yes");
-    assert(rows[1][0] === "Ben" && rows[1][2] === "1" && rows[1][3] === "1" && rows[1][6] === "–", "Ben / L2 row correct, thinking –");
+    for(const h of ["Class progress", "Ethixo Noticed", "May need attention", "Doing well", "All students", "Lessons students are practising", "Full-marks answers", "How these signals work"]) assert(tx.indexOf(h) !== -1, "section: " + h);
+    assert(/Ava/.test(tx) && /Ben/.test(tx) && /Dee/.test(tx), "students shown, including Dee who joined but has not practised");
+    assert(/Dee[\s\S]*Joined · no practice yet/.test(tx), "student with no attempts shown as joined, no practice yet");
+    assert(/Hello, Ms Tan!/.test(tx), "hero greets the teacher by profile name");
+    assert(!/Wenbo|Sharon|Aisyah|Marcus|Priya|P6-A|Orchid|Lily/.test(tx), "no demo-dashboard (Sharon) data");
     assert(!/Cara/.test(tx), "other class's student not shown for the selected class");
     assert(await t.page.$("select") !== null, "class picker present when the teacher has 2 classes");
     await t.page.selectOption("select", C2); await t.page.waitForTimeout(600);
@@ -92,9 +95,9 @@ const FAKE = "https://fakeref.supabase.co", KEY = "sb_publishable_TESTONLY";
     const calls = t.reqs.filter(r => r.path === "/rest/v1/rpc/teacher_attempt_summary").map(r => JSON.parse(r.body).p_class_id);
     assert(calls.join() === C1 + "," + C2, "summary RPC called per selected class");
     const tables = Array.from(new Set(rest(t.reqs))).sort().join(",");
-    assert(tables === "classes,profiles,rpc/teacher_attempt_summary", "ONLY these backend resources were requested: " + tables);
+    assert(tables === "class_members,classes,profiles,rpc/teacher_attempt_summary", "ONLY these backend resources were requested: " + tables);
     const controls = await t.page.$$eval("button, a, input, textarea, [contenteditable]", els => els.map(e => (e.innerText || e.value || e.tagName).trim().toLowerCase()));
-    assert(controls.every(c => /^(sign out|refresh|select)$/.test(c) || c === "select"), "the only interactive controls are Sign out, Refresh and sort/picker: " + JSON.stringify(controls));
+    assert(controls.every(c => /^(sign out|refresh|retry|select)$/.test(c) || c === "select"), "the only interactive controls are Sign out, Refresh and the class picker: " + JSON.stringify(controls));
     assert(!/export|download|delete|edit|remove|csv|answer text|feedback|vault/i.test(tx.replace(/students' written answers are never uploaded/i, "")), "no export, edit, delete, feedback or vault wording/controls");
     assert(t.errors.length === 0, "no JavaScript errors"); await t.ctx.close(); }
 
@@ -102,13 +105,13 @@ const FAKE = "https://fakeref.supabase.co", KEY = "sb_publishable_TESTONLY";
   { const t = await open({ session: true, profile: { id: "u1", role: "teacher", display_name: "Ms Tan", is_approved: true }, classes: [] });
     assert(/No class yet/.test(await text(t.page)) && !rest(t.reqs).some(p => /summary/.test(p)), "no class => clear empty state, no summary call"); await t.ctx.close(); }
   { const t = await open({ session: true, profile: { id: "u1", role: "teacher", display_name: "Ms Tan", is_approved: true }, classes: [{ id: C1, name: "Class One", join_code: "ABCD2345", created_at: "x" }], summary: [] });
-    assert(/No attempts yet/.test(await text(t.page)), "class without attempts => 'No attempts yet'"); await t.ctx.close(); }
+    assert(/No lessons practised yet/.test(await text(t.page)), "class without attempts => 'No lessons practised yet'"); await t.ctx.close(); }
   { const t = await open({ session: true, profile: { id: "u1", role: "teacher", display_name: "Ms Tan", is_approved: true }, classes: [{ id: C1, name: "Class One", join_code: "ABCD2345", created_at: "x" }], summaryError: true });
     assert(/Could not load progress/.test(await text(t.page)) && t.errors.length === 0, "summary error => friendly message, no crash"); await t.ctx.close(); }
 
   console.log("\nTest 8: markup injection from data is escaped");
   { const t = await open({ session: true, profile: { id: "u1", role: "teacher", display_name: "<img src=x onerror=window.__x=1>", is_approved: true }, classes: [{ id: C1, name: "<b>c</b>", join_code: "A", created_at: "x" }], summary: [S({ display_name: "<script>window.__y=1</script>" })] });
-    assert(await t.page.evaluate(() => !window.__x && !window.__y && !document.querySelector("#app img") && !document.querySelector("#app script") && document.querySelectorAll("#app b").length === 1 && document.querySelector("#app b").innerText.indexOf("<b>c</b>") === 0), "names and class names render as text, not HTML"); await t.ctx.close(); }
+    assert(await t.page.evaluate(() => !window.__x && !window.__y && !document.querySelector("#app img[src=x]") && !document.querySelector("#app script") && document.querySelector("#app b").innerText.indexOf("<b>c</b>") === 0 && document.body.innerText.indexOf("<script>window.__y=1</script>") !== -1), "names and class names render as text, not HTML"); await t.ctx.close(); }
 
   await browser.close(); server.close();
   console.log("\nRESULTS: " + passed + " passed, " + failed + " failed"); process.exit(failed ? 1 : 0);
