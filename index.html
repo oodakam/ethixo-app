@@ -1845,6 +1845,7 @@ function stateSnapshot(){
 }
 function goto(view, extra){
   requestSeq++; // invalidate any in-flight request from the screen we're leaving
+  if(pilotClassGateBlocks(view)) view = "dashboard"; // pilot host only, fail-open (see pilotClassGateBlocks)
   state.view = view; Object.assign(state, extra||{}); state.error = null;
   if(view === "qbank" && state.lessonId){ saveLastLesson(state.level, state.subjectKey, state.lessonId); }
   try{ history.pushState(stateSnapshot(), "", "#"+view); }catch(e){ /* history API unavailable in this context (e.g. sandboxed preview) — continue without it */ }
@@ -1863,6 +1864,7 @@ function toast(msg){ state.toast=msg; render(); setTimeout(()=>{ state.toast=nul
 /* ---------- Render ---------- */
 async function render(){
   const app = document.getElementById("app");
+  if(pilotClassGateBlocks(state.view)) state.view = "dashboard"; // covers back/forward navigation (pilot host only)
   app.classList.toggle("app-wide", state.view === "dashboard" || state.view === "teacherDashboard");
   app.innerHTML = topbar() + (state.toast? '<div class="badge" style="position:fixed;top:16px;right:16px;background:var(--brand-deep);color:#fff;border-color:var(--brand-deep);padding:8px 16px;z-index:99;">'+state.toast+'</div>':"") + '<div id="viewhost"></div>';
   const host = document.getElementById("viewhost");
@@ -1987,7 +1989,7 @@ function chooseLevel(){
   sSet("activePersona","student");
   markOnboarded(state.level);
   try{ ETHIXO_AUTH.studentActive(state.level); }catch(_e){ /* auth can never affect the app */ }
-  goto("subject");
+  goto(isPilotHost() ? "dashboard" : "subject"); // pilot host: the class-code card comes first
 }
 
 /* ---- Subject ---- */
@@ -3294,6 +3296,19 @@ let classJoinMsg = null, classJoinBusy = false, classJoinDraft = { name: "", cod
 function classEsc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
 /* Pilot host only (allow-listed host): neutral labels instead of the demo persona. Empty allow-list => false => demo unchanged. */
 function isPilotHost(){ try{ return typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" && DB_SYNC_ALLOWED_HOSTS.indexOf(String(location.hostname).toLowerCase()) !== -1; }catch(_e){ return false; } }
+/* Pilot host only: learning screens wait for a recorded class join (CLASS_JOIN_KEY). Local flag, not tamper-proof (supervised pilot).
+   FAIL-OPEN: the gate only applies while student sign-in is in progress or confirmed (signing-in / signed-in / profile-ok).
+   If sign-in is degraded, disabled or off, or sync is off for this build, nothing is blocked and the normal local-first flow runs. */
+const PILOT_GATED_VIEWS = ["subject","lessons","qbank","customQ","answer","feedback","improve","thinking"];
+function pilotClassGateBlocks(view){
+  try{
+    if(!isPilotHost() || PILOT_GATED_VIEWS.indexOf(view) === -1) return false;
+    if(typeof DB_SYNC_MODE !== "undefined" && DB_SYNC_MODE === "off") return false;
+    if(["signing-in","signed-in","profile-ok"].indexOf(ETHIXO_AUTH.status()) === -1) return false;
+    let joined = null; try{ joined = JSON.parse(localStorage.getItem(CLASS_JOIN_KEY)); }catch(_e){ joined = null; }
+    return !(joined && joined.name);
+  }catch(_e){ return false; }
+}
 function classCodeCardHtml(){
   let st = "off"; try{ st = ETHIXO_AUTH.status(); }catch(_e){ st = "off"; }
   if(st === "off" || st === "disabled") return "";
