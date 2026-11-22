@@ -1951,7 +1951,12 @@ function viewEntry(){
   '</div>';
 }
 function enterAsStudent(){ sSet("activePersona","student"); goto("level"); }
-function enterAsTeacher(){ sSet("activePersona","teacher"); goto("teacherDashboard"); }
+function enterAsTeacher(){
+  /* Pilot only: on an allow-listed pilot host (list filled in by api/pilot-app.js) the entry-page Teacher card opens the real
+     teacher sign-in. Everywhere else (allow-list empty) it still opens the demo Teacher Dashboard, unchanged. */
+  if(typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" && DB_SYNC_ALLOWED_HOSTS.indexOf(String(location.hostname).toLowerCase()) !== -1){ location.assign("/pilot-teacher"); return; }
+  sSet("activePersona","teacher"); goto("teacherDashboard");
+}
 function switchToTeacher(){ sSet("activePersona","teacher"); goto("teacherDashboard"); }
 function switchToStudent(){
   sSet("activePersona","student");
