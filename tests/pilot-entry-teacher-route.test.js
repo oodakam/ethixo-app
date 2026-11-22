@@ -33,18 +33,17 @@ function assert(c, m) { if (c) { passed++; console.log("  PASS:", m); } else { f
     await page.goto(base + pathname, { waitUntil: "load" });
     await page.evaluate(() => localStorage.clear());
     await page.goto(base + pathname, { waitUntil: "load" });
-    await page.locator(".choice", { hasText: card }).first().click();
+    if (pathname === "/pilot") await page.locator("a", { hasText: "Teacher sign in" }).first().click();   // pilot entry: teacher link
+    else await page.locator(".choice", { hasText: card }).first().click();
     await page.waitForTimeout(500);
     const out = { path: new URL(page.url()).pathname, hash: new URL(page.url()).hash, body: await page.locator("body").innerText(), persona: await page.evaluate(() => { try { return JSON.parse(localStorage.getItem("activePersona")); } catch (_e) { return null; } }), supa };
     await ctx.close(); return out;
   }
   console.log("Pilot page (allow-listed host):");
   const t = await run("/pilot", "Teacher");
-  assert(t.path === "/pilot-teacher" && /TEACHER-SIGNIN-STUB/.test(t.body), "Teacher card navigates to /pilot-teacher");
+  assert(t.path === "/pilot-teacher" && /TEACHER-SIGNIN-STUB/.test(t.body), "Teacher sign-in link navigates to /pilot-teacher");
   assert(t.persona !== "teacher", "demo teacher persona is NOT set");
   assert(t.supa === 0, "no Supabase request from the entry page");
-  const s = await run("/pilot", "Student");
-  assert(s.path === "/pilot" && s.hash === "#level", "Student card unchanged (level screen)");
   console.log("Unconfigured page (main/Production behaviour):");
   const d = await run("/plain", "Teacher");
   assert(d.path === "/plain" && d.hash === "#teacherDashboard" && /Sharon Lim/.test(d.body), "Teacher card still opens the demo Teacher Dashboard");

@@ -1845,7 +1845,7 @@ function stateSnapshot(){
 }
 function goto(view, extra){
   requestSeq++; // invalidate any in-flight request from the screen we're leaving
-  if(pilotClassGateBlocks(view)) view = "dashboard"; // pilot host only, fail-open (see pilotClassGateBlocks)
+  if(pilotClassGateBlocks(view)) view = "entry"; // pilot host only, fail-open (see pilotClassGateBlocks)
   state.view = view; Object.assign(state, extra||{}); state.error = null;
   if(view === "qbank" && state.lessonId){ saveLastLesson(state.level, state.subjectKey, state.lessonId); }
   try{ history.pushState(stateSnapshot(), "", "#"+view); }catch(e){ /* history API unavailable in this context (e.g. sandboxed preview) — continue without it */ }
@@ -1864,7 +1864,7 @@ function toast(msg){ state.toast=msg; render(); setTimeout(()=>{ state.toast=nul
 /* ---------- Render ---------- */
 async function render(){
   const app = document.getElementById("app");
-  if(pilotClassGateBlocks(state.view)) state.view = "dashboard"; // covers back/forward navigation (pilot host only)
+  if(pilotClassGateBlocks(state.view)) state.view = "entry"; // covers back/forward navigation (pilot host only)
   app.classList.toggle("app-wide", state.view === "dashboard" || state.view === "teacherDashboard");
   app.innerHTML = topbar() + (state.toast? '<div class="badge" style="position:fixed;top:16px;right:16px;background:var(--brand-deep);color:#fff;border-color:var(--brand-deep);padding:8px 16px;z-index:99;">'+state.toast+'</div>':"") + '<div id="viewhost"></div>';
   const host = document.getElementById("viewhost");
@@ -1912,7 +1912,7 @@ function topbar(){
 
   let switchLink = "";
   if(persona === "teacher"){ switchLink = '<button class="vault-link" onclick="switchToStudent()">Switch to Student View</button>'; }
-  else if(persona === "student" && onboarded){ switchLink = '<button class="vault-link" onclick="switchToTeacher()">Switch to Teacher View</button>'; }
+  else if(persona === "student" && onboarded && !isPilotHost()){ switchLink = '<button class="vault-link" onclick="switchToTeacher()">Switch to Teacher View</button>'; }
 
   const PRACTICE_FLOW_VIEWS = ["subject","lessons","qbank","customQ","answer","feedback","improve","thinking"];
   const studentBtns = (persona==="student")
@@ -1936,6 +1936,7 @@ function toggleMobileNav(){
 
 /* ---- Entry (Role Selector) ---- */
 function viewEntry(){
+  if(isPilotHost()) return viewPilotEntry();   // pilot host: Name + Class Code is the entry step
   return '<div class="card center">'+
     '<svg class="heroart" viewBox="0 0 120 120" fill="none">'+
     '<circle cx="60" cy="60" r="52" stroke="url(#g1)" stroke-width="6"/>'+
@@ -1989,7 +1990,7 @@ function chooseLevel(){
   sSet("activePersona","student");
   markOnboarded(state.level);
   try{ ETHIXO_AUTH.studentActive(state.level); }catch(_e){ /* auth can never affect the app */ }
-  goto(isPilotHost() ? "dashboard" : "subject"); // pilot host: the class-code card comes first
+  goto("subject");
 }
 
 /* ---- Subject ---- */
@@ -3355,6 +3356,57 @@ async function joinClassFromCard(){
     classJoinBusy = false; render();
   }
 }
+/* ---- Pilot entry (pilot host only): Name + Class Code -> existing anonymous sign-in/profile (P6) -> join_class -> Subject.
+   Joining is recorded (CLASS_JOIN_KEY) only after the join_class RPC succeeds. Same RPC, same profile mechanism as the card above. ---- */
+const PILOT_LEVEL = "P6"; // the pilot is P6-only
+function pilotJoined(){ let j = null; try{ j = JSON.parse(localStorage.getItem(CLASS_JOIN_KEY)); }catch(_e){ j = null; } return !!(j && j.name); }
+function viewPilotEntry(){
+  const inp = 'padding:12px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-bottom:10px;font-size:16px;';
+  return '<div class="card center">'+
+    '<h1 class="title">Learn to answer with Clarity</h1>'+
+    '<p class="sub">Enter your name and the class code from your teacher.</p>'+
+    '<div style="max-width:360px;margin:16px auto 0;text-align:left;">'+
+      '<input id="classNameInput" maxlength="40" value="'+classEsc(classJoinDraft.name)+'" placeholder="Your first name or nickname" autocomplete="off" style="'+inp+'">'+
+      '<input id="classCodeInput" maxlength="10" value="'+classEsc(classJoinDraft.code)+'" placeholder="Class code" autocomplete="off" style="'+inp+'text-transform:uppercase;">'+
+      '<button class="btn btn-primary" style="width:100%;" onclick="joinPilotStudent()"'+(classJoinBusy?' disabled':'')+'>'+(classJoinBusy?'Joining…':'Join')+'</button>'+
+      (classJoinMsg ? '<p class="qmeta" style="margin:10px 0 0;">'+classEsc(classJoinMsg)+'</p>' : '')+
+    '</div>'+
+    '<p class="qmeta" style="margin-top:18px;"><a href="#" onclick="enterAsTeacher();return false;">Teacher sign in</a></p>'+
+  '</div>';
+}
+async function joinPilotStudent(){
+  if(classJoinBusy) return;
+  const nameEl = document.getElementById("classNameInput"), codeEl = document.getElementById("classCodeInput");
+  const name = nameEl ? String(nameEl.value).trim() : "", code = codeEl ? String(codeEl.value).trim().toUpperCase() : "";
+  classJoinDraft = { name: name, code: code };
+  if(name.length < 1 || name.length > 40){ classJoinMsg = "Please enter your name (up to 40 letters)."; render(); return; }
+  if(!/^[0-9A-F]{10}$/.test(code)){ classJoinMsg = "The class code has 10 letters and numbers. Please check it with your teacher."; render(); return; }
+  classJoinBusy = true; classJoinMsg = null; render();
+  try{
+    state.level = PILOT_LEVEL;
+    let started = null; try{ started = ETHIXO_AUTH.studentActive(PILOT_LEVEL); }catch(_e){ started = null; }
+    if(started && typeof started.then === "function"){ try{ await started; }catch(_e){ /* handled below via readyClient */ } }
+    let c = null; try{ c = ETHIXO_AUTH.readyClient(); }catch(_e){ c = null; }
+    if(!c) throw { code: "connecting" };            // never mark as joined without the real RPC result
+    const u = await c.auth.getUser();
+    const uid = u && u.data && u.data.user ? u.data.user.id : null;
+    if(!uid) throw { code: "session" };
+    const up = await c.from("profiles").update({ display_name: name }).eq("id", uid);
+    if(up.error) throw up.error;
+    const r = await c.rpc("join_class", { p_code: code });
+    if(r.error) throw r.error;
+    const row = Array.isArray(r.data) ? r.data[0] : r.data;
+    try{ localStorage.setItem(CLASS_JOIN_KEY, JSON.stringify({ name: row && row.class_name ? row.class_name : "Joined", who: name, at: Date.now() })); }catch(_e){}
+    sSet("activePersona","student"); markOnboarded(PILOT_LEVEL);
+    classJoinMsg = null; classJoinDraft = { name: "", code: "" }; classJoinBusy = false;
+    goto("subject"); return;
+  }catch(e){
+    classJoinMsg = (e && e.code === "P0002") ? "That class code was not found. Please check it with your teacher."
+      : (e && e.code === "connecting") ? "Could not connect yet. Please check your internet and try Join again."
+      : "Could not join right now. Please try again.";
+  }
+  classJoinBusy = false; render();
+}
 /* ETHIXO-CLASSCODE-END */
 
 function viewDashboard(){
@@ -3729,7 +3781,7 @@ window.TEACHER_PROFILE = TEACHER_PROFILE; window.TEACHER_CLASSES = TEACHER_CLASS
 
     if(activePersona === "teacher"){
       state.view = "teacherDashboard";
-    } else if(activePersona === "student" && savedLevel){
+    } else if(activePersona === "student" && savedLevel && !(isPilotHost() && !pilotJoined())){
       state.level = savedLevel;
       state.view = "dashboard";
       try{ ETHIXO_AUTH.studentActive(savedLevel); }catch(_e){ /* auth can never affect the app */ }
