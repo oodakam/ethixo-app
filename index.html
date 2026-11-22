@@ -1183,7 +1183,7 @@ const ETHIXO_AUTH = createEthixoAuth({
   mode: DB_SYNC_MODE, sync: ETHIXO_SYNC,
   allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" ? DB_SYNC_ALLOWED_HOSTS : []),
   config: { url: SUPABASE_URL, key: SUPABASE_PUBLISHABLE_KEY, libPath: SUPABASE_LIB_PATH },
-  onProfileOk: function(){ try{ ETHIXO_ATTEMPTS.schedule(); }catch(_e){ /* never affects sign-in */ } try{ ETHIXO_BACKFILL.start(); }catch(_e){ /* never affects sign-in */ } },
+  onProfileOk: function(){ try{ if(isPilotHost() && state.view === "dashboard" && !document.getElementById("classCodeCard")) render(); }catch(_e){ /* pilot only: one re-render so the Join your class card shows */ } try{ ETHIXO_ATTEMPTS.schedule(); }catch(_e){ /* never affects sign-in */ } try{ ETHIXO_BACKFILL.start(); }catch(_e){ /* never affects sign-in */ } },
 });
 /* ETHIXO-AUTH-END */
 
@@ -1906,7 +1906,7 @@ function topbar(){
 
   const profileBlock = !persona ? "" : (persona === "teacher"
     ? '<div class="profile-chip">'+teacherAvatar(30)+'<div><div class="pname">Sharon Lim</div><div class="plast">Teacher</div></div></div>'
-    : '<div class="profile-chip">'+wenboAvatar(30)+'<div><div class="pname">Wenbo Lee</div><div class="plast">'+(state.lastActiveText||"Just now")+'</div></div></div>');
+    : '<div class="profile-chip">'+wenboAvatar(30)+'<div><div class="pname">'+(isPilotHost()?"Student":"Wenbo Lee")+'</div><div class="plast">'+(state.lastActiveText||"Just now")+'</div></div></div>');
 
   let switchLink = "";
   if(persona === "teacher"){ switchLink = '<button class="vault-link" onclick="switchToStudent()">Switch to Student View</button>'; }
@@ -1944,10 +1944,10 @@ function viewEntry(){
     '<p class="sub">Ethixo doesn\'t hand you the answer — it\'ll sharpen yours until it earns full marks.</p>'+
     '<p class="qmeta" style="margin:6px 0 14px;">Explore Ethixo as:</p>'+
     '<div class="grid cols2">'+
-      '<div class="choice" onclick="enterAsStudent()">'+wenboAvatar(56)+'<h3 style="margin-top:10px;">Student</h3><p>Wenbo Lee · Primary 6</p></div>'+
-      '<div class="choice" onclick="enterAsTeacher()">'+teacherAvatar(56)+'<h3 style="margin-top:10px;">Teacher</h3><p>Sharon Lim · Social Science</p></div>'+
+      '<div class="choice" onclick="enterAsStudent()">'+wenboAvatar(56)+'<h3 style="margin-top:10px;">Student</h3>'+(isPilotHost()?"":"<p>Wenbo Lee · Primary 6</p>")+'</div>'+
+      '<div class="choice" onclick="enterAsTeacher()">'+teacherAvatar(56)+'<h3 style="margin-top:10px;">Teacher</h3>'+(isPilotHost()?"":"<p>Sharon Lim · Social Science</p>")+'</div>'+
     '</div>'+
-    '<div class="disabledline" style="margin-top:16px;">Google / Apple / School ID sign-in — wired up in a later phase</div>'+
+    (isPilotHost()?"":'<div class="disabledline" style="margin-top:16px;">Google / Apple / School ID sign-in — wired up in a later phase</div>')+
   '</div>';
 }
 function enterAsStudent(){ sSet("activePersona","student"); goto("level"); }
@@ -3292,15 +3292,17 @@ function markNoticedSeen(ids){
 const CLASS_JOIN_KEY = "ethixoClassJoined";
 let classJoinMsg = null, classJoinBusy = false, classJoinDraft = { name: "", code: "" };
 function classEsc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+/* Pilot host only (allow-listed host): neutral labels instead of the demo persona. Empty allow-list => false => demo unchanged. */
+function isPilotHost(){ try{ return typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" && DB_SYNC_ALLOWED_HOSTS.indexOf(String(location.hostname).toLowerCase()) !== -1; }catch(_e){ return false; } }
 function classCodeCardHtml(){
   let st = "off"; try{ st = ETHIXO_AUTH.status(); }catch(_e){ st = "off"; }
   if(st === "off" || st === "disabled") return "";
   let joined = null; try{ joined = JSON.parse(localStorage.getItem(CLASS_JOIN_KEY)); }catch(_e){ joined = null; }
   if(joined && joined.name){
-    return '<div class="card" style="margin:16px 0;padding:14px 18px;"><b>Class:</b> '+classEsc(joined.name)+' ✓'+
+    return '<div id="classCodeCard" class="card" style="margin:16px 0;padding:14px 18px;"><b>Class:</b> '+classEsc(joined.name)+' ✓'+
       (joined.who ? ' <span class="qmeta">· your teacher sees you as '+classEsc(joined.who)+'</span>' : '')+'</div>';
   }
-  return '<div class="card" style="margin:16px 0;padding:16px 18px;">'+
+  return '<div id="classCodeCard" class="card" style="margin:16px 0;padding:16px 18px;">'+
     '<h3 style="margin:0 0 6px;">Join your class</h3>'+
     '<p class="qmeta" style="margin:0 0 10px;">Your teacher will give you a class code. Your teacher will only see your scores, not your written answers.</p>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
@@ -3353,7 +3355,7 @@ function viewDashboard(){
   if(!d.hasActivity){
     return '<div class="dash-shell">'+
       '<div class="dash-welcome-refined">'+wenboAvatar(64)+
-        '<div><h1>Welcome, Wenbo!</h1><p>Let\'s get started on becoming a stronger learner.</p></div>'+
+        '<div><h1>Welcome'+(isPilotHost()?"":", Wenbo")+'!</h1><p>Let\'s get started on becoming a stronger learner.</p></div>'+
       '</div>'+
       heroCard('default', false)+
       assignedLearningHtml+
@@ -3388,7 +3390,7 @@ function viewDashboard(){
 
   return '<div class="dash-shell">'+
     '<div class="dash-welcome-refined">'+wenboAvatar(64)+
-      '<div><h1>Welcome back, Wenbo!</h1><p>This term, you\'re becoming a stronger learner.</p></div>'+
+      '<div><h1>Welcome back'+(isPilotHost()?"":", Wenbo")+'!</h1><p>This term, you\'re becoming a stronger learner.</p></div>'+
     '</div>'+
     heroCard(pickHeroState(), true)+
     assignedLearningHtml+
