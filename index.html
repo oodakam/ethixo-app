@@ -1183,7 +1183,7 @@ const ETHIXO_AUTH = createEthixoAuth({
   mode: DB_SYNC_MODE, sync: ETHIXO_SYNC,
   allowedHosts: (typeof DB_SYNC_ALLOWED_HOSTS !== "undefined" ? DB_SYNC_ALLOWED_HOSTS : []),
   config: { url: SUPABASE_URL, key: SUPABASE_PUBLISHABLE_KEY, libPath: SUPABASE_LIB_PATH },
-  onProfileOk: function(){ try{ if(isPilotHost() && state.view === "dashboard" && !document.getElementById("classCodeCard")) render(); }catch(_e){ /* pilot only: one re-render so the Join your class card shows */ } try{ ETHIXO_ATTEMPTS.schedule(); }catch(_e){ /* never affects sign-in */ } try{ ETHIXO_BACKFILL.start(); }catch(_e){ /* never affects sign-in */ } },
+  onProfileOk: function(){ try{ if(isPilotHost()){ loadPilotAssignments(); if(state.view === "dashboard" && !document.getElementById("classCodeCard")) render(); } }catch(_e){ /* pilot only: one re-render so the Join your class card shows */ } try{ ETHIXO_ATTEMPTS.schedule(); }catch(_e){ /* never affects sign-in */ } try{ ETHIXO_BACKFILL.start(); }catch(_e){ /* never affects sign-in */ } },
 });
 /* ETHIXO-AUTH-END */
 
@@ -1869,6 +1869,7 @@ async function render(){
   app.innerHTML = topbar() + (state.toast? '<div class="badge" style="position:fixed;top:16px;right:16px;background:var(--brand-deep);color:#fff;border-color:var(--brand-deep);padding:8px 16px;z-index:99;">'+state.toast+'</div>':"") + '<div id="viewhost"></div>';
   const host = document.getElementById("viewhost");
   host.innerHTML = '<div class="loading"><div class="spinner"></div>Loading…</div>';
+  if(state.view === "dashboard" && isPilotHost()){ try{ loadPilotAssignments(); }catch(_e){ /* silent */ } }
 
   let html = "";
   if(state.view==="entry") html = viewEntry();
@@ -2049,7 +2050,31 @@ const ASSIGN_TARGET_CLASS_ID = "p6a";
 const ASSIGN_TARGET_LEVEL = "P6";
 const TEACHER_ASSIGNMENTS_KEY = "teacherAssignments";
 
-function getTeacherAssignments(){ return sGet(TEACHER_ASSIGNMENTS_KEY) || []; }
+let pilotAssignments = [], pilotAssignLoading = false;   // pilot host only: the real assignments of the student's own class (public.assignments, RLS in_class)
+function getTeacherAssignments(){ return isPilotHost() ? pilotAssignments : (sGet(TEACHER_ASSIGNMENTS_KEY) || []); }
+// Pilot host only. Reads the student's own class assignments through the existing student RLS policy; failure is silent (local-first).
+async function loadPilotAssignments(){
+  if(!isPilotHost() || pilotAssignLoading) return;
+  let c = null; try{ c = ETHIXO_AUTH.readyClient(); }catch(_e){ c = null; }
+  if(!c) return;
+  pilotAssignLoading = true;
+  try{
+    const r = await c.from("assignments").select("id,class_id,level,subject_key,lesson_id,due_date,created_at").order("created_at", { ascending:true });
+    if(!r.error && Array.isArray(r.data)){
+      const next = [];
+      r.data.forEach(function(a){
+        const subj = LEVELS[a.level] && LEVELS[a.level][a.subject_key]; if(!subj) return;
+        let title = null; subj.chapters.forEach(function(ch){ if(ch.locked) return; ch.lessons.forEach(function(l){ if(l.id === a.lesson_id) title = l.title; }); });
+        if(title === null) return;
+        next.push({ id:a.id, classId:a.class_id, level:a.level, subjectKey:a.subject_key, lessonId:a.lesson_id, lessonTitle:title, dueDate:a.due_date || "", assignedAt:Date.parse(a.created_at) || 0 });
+      });
+      const changed = JSON.stringify(next) !== JSON.stringify(pilotAssignments);
+      pilotAssignments = next;
+      if(changed && state.view === "dashboard") render();
+    }
+  }catch(_e){ /* local-first: never affects the app */ }
+  finally{ pilotAssignLoading = false; }
+}
 
 function formatDueDate(iso){
   if(!iso) return "";

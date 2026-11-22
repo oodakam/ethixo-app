@@ -1,6 +1,6 @@
 // Generates assets/pilot-lesson-meta.json from the question bank in index.html.
-// Contains ONLY: subject names, lesson ids/titles, and the max marks per question index.
-// It deliberately contains NO question text and NO answer keys (the teacher page must never have them).
+// Contains ONLY: subject names, lesson ids/titles, whether the lesson's chapter is locked, and per question index: the max marks
+// and the curriculum question PROMPT (q.t). It deliberately contains NO answer keys (q.a) and nothing from student data.
 // Usage: node scripts/build-pilot-lesson-meta.js [--check]   (--check exits 1 if the committed file is out of date)
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const root = path.join(__dirname, "..");
@@ -16,7 +16,7 @@ for (const lvl of Object.keys(LEVELS)) {
   out[lvl] = {};
   for (const sk of Object.keys(LEVELS[lvl])) {
     const lessons = {};
-    for (const ch of LEVELS[lvl][sk].chapters) for (const ls of ch.lessons) lessons[ls.id] = { title: ls.title, marks: ls.questions.map(q => q.m) };
+    for (const ch of LEVELS[lvl][sk].chapters) for (const ls of ch.lessons) lessons[ls.id] = { title: ls.title, locked: !!ch.locked, marks: ls.questions.map(q => q.m), prompts: ls.questions.map(q => String(q.t)) };
     out[lvl][sk] = { name: SUBJECT_META[sk] ? SUBJECT_META[sk].name : sk, lessons };
   }
 }

@@ -33,10 +33,11 @@ const FAKE = "https://fakeref.supabase.co", KEY = "sb_publishable_TESTONLY";
       const j = (code, body) => route.fulfill({ status: code, contentType: "application/json", headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" }, body: JSON.stringify(body) });
       if(rq.method() === "OPTIONS") return j(200, {});
       if(u.pathname === "/auth/v1/otp") return j(200, {});
-      if(u.pathname === "/rest/v1/class_members"){ const cid = (u.search.match(/class_id=eq\.([^&]+)/)||[])[1]; return j(200, (opts.roster || []).filter(m => m.class_id === cid).map(m => ({ student_id: m.id }))); }
+      if(u.pathname === "/rest/v1/class_members"){ return j(200, (opts.roster || []).map(m => ({ student_id: m.id, class_id: m.class_id }))); }
       if(u.pathname === "/rest/v1/profiles" && /id=in\./.test(u.search)){ const ids = (decodeURIComponent(u.search).match(/id=in\.\(([^)]*)\)/)||[])[1]||"".replace(/"/g,"").split(","); return j(200, (opts.roster || []).filter(m => ids.indexOf(m.id) !== -1).map(m => ({ id: m.id, display_name: m.name }))); }
       if(u.pathname === "/rest/v1/profiles"){ return j(200, opts.profile ? [opts.profile] : []); }   // supabase-js maybeSingle() reads an array and takes the first row
       if(u.pathname === "/rest/v1/rpc/create_my_profile"){ opts.created = true; opts.profile = { id: "u1", role: "teacher", display_name: "Ms Tan", is_approved: false }; return j(200, opts.profile); }
+      if(u.pathname === "/rest/v1/assignments") return j(200, []);
       if(u.pathname === "/rest/v1/classes") return j(200, opts.classes || []);
       if(u.pathname === "/rest/v1/rpc/teacher_attempt_summary"){ if(opts.summaryError) return j(500, { code: "XX000", message: "boom" }); const b = JSON.parse(rq.postData() || "{}"); return j(200, (opts.summary || []).filter(r => !b.p_class_id || r.class_id === b.p_class_id)); }
       return j(404, { message: "unexpected " + u.pathname });
@@ -83,21 +84,21 @@ const FAKE = "https://fakeref.supabase.co", KEY = "sb_publishable_TESTONLY";
   { const o = { session: true, profile: { id: "u1", role: "teacher", display_name: "Ms Tan", is_approved: true }, classes: [{ id: C1, name: "Class One", join_code: "ABCD2345", created_at: "x" }, { id: C2, name: "Class Two", join_code: "WXYZ6789", created_at: "y" }], summary, roster: [{ id: "s1", name: "Ava", class_id: C1 }, { id: "s2", name: "Ben", class_id: C1 }, { id: "s0", name: "Dee", class_id: C1 }, { id: "s3", name: "Cara", class_id: C2 }] };
     const t = await open(o); const tx = await text(t.page);
     assert(/Class One/.test(tx) && /ABCD2345/.test(tx), "class name and class code shown");
-    for(const h of ["Class progress", "Ethixo Noticed", "May need attention", "Doing well", "All students", "Lessons students are practising", "Full-marks answers", "How these signals work"]) assert(tx.indexOf(h) !== -1, "section: " + h);
+    for(const h of ["Class Progress", "Ethixo Noticed", "Students to Encourage", "Doing well", "All students", "Teaching Insights", "Exam Ready Answers", "How these signals work"]) assert(tx.indexOf(h) !== -1, "section: " + h);
     assert(/Ava/.test(tx) && /Ben/.test(tx) && /Dee/.test(tx), "students shown, including Dee who joined but has not practised");
     assert(/Dee[\s\S]*Joined · no practice yet/.test(tx), "student with no attempts shown as joined, no practice yet");
-    assert(/Hello, Ms Tan!/.test(tx), "hero greets the teacher by profile name");
+    assert(/Good (morning|afternoon|evening), Ms Tan!/.test(tx), "hero greets the teacher by profile name");
     assert(!/Wenbo|Sharon|Aisyah|Marcus|Priya|P6-A|Orchid|Lily/.test(tx), "no demo-dashboard (Sharon) data");
-    assert(!/Cara/.test(tx), "other class's student not shown for the selected class");
-    assert(await t.page.$("select") !== null, "class picker present when the teacher has 2 classes");
-    await t.page.selectOption("select", C2); await t.page.waitForTimeout(600);
+    await t.page.locator(".class-tab", { hasText: "Class One" }).click(); await t.page.waitForTimeout(300); const tx1 = await text(t.page); assert(!/Cara/.test(tx1) && /Ava/.test(tx1), "class tab: other class's student not shown");
+    assert(await t.page.locator(".class-tab").count() === 3, "tabs: Overview + two classes");
+    await t.page.locator(".class-tab", { hasText: "Class Two" }).click(); await t.page.waitForTimeout(300);
     const tx2 = await text(t.page); assert(/Cara/.test(tx2) && !/Ava/.test(tx2) && /WXYZ6789/.test(tx2), "switching class shows only that class and its code");
-    const calls = t.reqs.filter(r => r.path === "/rest/v1/rpc/teacher_attempt_summary").map(r => JSON.parse(r.body).p_class_id);
-    assert(calls.join() === C1 + "," + C2, "summary RPC called per selected class");
+    const calls = t.reqs.filter(r => r.path === "/rest/v1/rpc/teacher_attempt_summary");
+    assert(calls.length === 1, "summary RPC called once (all own classes; tabs filter client-side)");
     const tables = Array.from(new Set(rest(t.reqs))).sort().join(",");
-    assert(tables === "class_members,classes,profiles,rpc/teacher_attempt_summary", "ONLY these backend resources were requested: " + tables);
+    assert(tables === "assignments,class_members,classes,profiles,rpc/teacher_attempt_summary", "ONLY these backend resources were requested: " + tables);
     const controls = await t.page.$$eval("button, a, input, textarea, [contenteditable]", els => els.map(e => (e.innerText || e.value || e.tagName).trim().toLowerCase()));
-    assert(controls.every(c => /^(sign out|refresh|retry|select)$/.test(c) || c === "select"), "the only interactive controls are Sign out, Refresh and the class picker: " + JSON.stringify(controls));
+    assert(controls.every(c => /^(sign out|refresh|retry|overview|class one|class two|📋 assign learning)$/.test(c)) && !controls.some(c => /input|textarea|export|download|delete|edit/.test(c)), "interactive controls are only Sign out, Refresh, class tabs and Assign Learning: " + JSON.stringify(controls));
     assert(!/export|download|delete|edit|remove|csv|answer text|feedback|vault/i.test(tx.replace(/students' written answers are never uploaded/i, "")), "no export, edit, delete, feedback or vault wording/controls");
     assert(t.errors.length === 0, "no JavaScript errors"); await t.ctx.close(); }
 
@@ -111,7 +112,7 @@ const FAKE = "https://fakeref.supabase.co", KEY = "sb_publishable_TESTONLY";
 
   console.log("\nTest 8: markup injection from data is escaped");
   { const t = await open({ session: true, profile: { id: "u1", role: "teacher", display_name: "<img src=x onerror=window.__x=1>", is_approved: true }, classes: [{ id: C1, name: "<b>c</b>", join_code: "A", created_at: "x" }], summary: [S({ display_name: "<script>window.__y=1</script>" })] });
-    assert(await t.page.evaluate(() => !window.__x && !window.__y && !document.querySelector("#app img[src=x]") && !document.querySelector("#app script") && document.querySelector("#app b").innerText.indexOf("<b>c</b>") === 0 && document.body.innerText.indexOf("<script>window.__y=1</script>") !== -1), "names and class names render as text, not HTML"); await t.ctx.close(); }
+    assert(await t.page.evaluate(() => !window.__x && !window.__y && !document.querySelector("#app img[src=x]") && !document.querySelector("#app script") && document.body.innerText.indexOf("<b>c</b>") !== -1 && !document.querySelector("#app .class-tab b") && document.body.innerText.indexOf("<script>window.__y=1</script>") !== -1), "names and class names render as text, not HTML"); await t.ctx.close(); }
 
   await browser.close(); server.close();
   console.log("\nRESULTS: " + passed + " passed, " + failed + " failed"); process.exit(failed ? 1 : 0);

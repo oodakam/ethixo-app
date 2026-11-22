@@ -149,7 +149,29 @@
 .growth-card.t-clickable:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(24,36,32,.12);}
 .t-tap-hint{font-size:12px;font-weight:700;color:var(--brand-deep);margin-top:10px;opacity:.85;}
 .t-insight-banner{background:var(--brand-light);border:1px solid var(--brand-light-b);border-radius:14px;padding:16px 18px;font-size:14.5px;font-weight:600;color:var(--brand-deep);margin-bottom:20px;}
+  /* ---- copied buttons/forms/detail rows from index.html ---- */
+  .center{text-align:center;}
+  .btn{border:none;border-radius:12px;padding:13px 22px;font-weight:700;font-size:14.5px;cursor:pointer;font-family:'Montserrat',sans-serif;transition:.15s;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .btn-primary{background:linear-gradient(120deg,var(--brand),var(--brand-dark));color:#fff;}
+  .btn-primary:hover:not(:disabled){filter:brightness(1.06);}
+  .btn-outline{background:#fff;border:1.5px solid var(--brand);color:var(--brand-deep);}
+  .btn-outline:hover:not(:disabled){background:var(--brand-light);}
+  .btn-ghost{background:transparent;color:var(--ink);border:1.5px solid var(--border);}
+  .qmeta{color:var(--muted);font-size:11.5px;margin-top:2px;}
+  .assign-input{width:100%;border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;font-family:'Montserrat',sans-serif;font-size:14.5px;background:#fff;color:var(--ink);}
+  .assign-input:disabled{background:var(--panel);color:var(--muted);}
+  .learned-item{display:flex;gap:8px;padding:6px 0;font-size:14px;color:var(--ink);}
+  .learned-item::before{content:"✓";color:var(--brand-deep);font-weight:800;flex:none;}
+  .detail-item{border:1px solid var(--border);border-radius:14px;padding:14px 18px;margin-bottom:11px;}
+  .detail-item b{display:block;color:var(--ink);font-size:14.5px;margin-bottom:3px;}
+  .detail-item span{color:var(--muted);font-size:13.5px;}
+  label.field{font-weight:700;color:var(--ink);font-size:13.5px;display:block;margin:16px 0 6px;}
   /* ---- pilot-only additions (status chips, student rows, how-it-works) ---- */
+  .t-misc-meta{white-space:normal;text-align:right;}
+  .t-misc-title{min-width:0;overflow-wrap:anywhere;}
+  @media(max-width:560px){.t-misc-row{flex-direction:column;align-items:flex-start;gap:6px;}.t-misc-meta{margin-left:0;text-align:left;}}
+  .t-misc-row.t-clickable{cursor:pointer;} .t-misc-row.t-clickable:hover{background:rgba(255,255,255,.6);}
   .t-chip{display:inline-block;font-size:12px;font-weight:700;border-radius:20px;padding:3px 10px;background:var(--brand-light);color:var(--brand-deep);}
   .t-chip.warn{background:#FCE8E4;color:#9c3a28;} .t-chip.amber{background:var(--amber-bg);color:#8a5c14;} .t-chip.grey{background:#ECEEED;color:var(--muted);}
   .t-chip.blue{background:#E3EEFB;color:#1D5A9E;}
@@ -180,7 +202,7 @@ const DB_SYNC_ALLOWED_HOSTS = [];
    - Writes ONLY: create_my_profile('teacher', name) once (unapproved by default; approval is an operator step). */
 const LIB = "assets/vendor/supabase-js-2.117.2.umd.js";
 const app = document.getElementById("app");
-let client = null, view = { classes: [], classId: null, rows: [], members: [], page: "dash", studentId: null, msg: "" };
+let client = null, view = { classes: [], rows: [], members: [], assignments: [], tab: "overview", page: "dash", studentId: null, msg: "" };
 
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function show(html){ app.innerHTML = html; }
@@ -277,37 +299,49 @@ function teacherAvatar(size){
 }
 function dicon(name, px){ return '<svg width="'+px+'" height="'+px+'" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'+DASH_ICON_PATHS[name]+'</svg>'; }
 
-/* ---- Pilot Teacher Dashboard: same layout/information architecture as the Sharon Lim demo dashboard in index.html,
-   fed ONLY by teacher_attempt_summary() + class roster + lesson-meta (titles/marks). Signal rules: assets/pilot-teacher-insights.js ---- */
+/* ---- Pilot Teacher Dashboard: same layout and navigation as the Sharon Lim demo dashboard in index.html, fed ONLY by
+   teacher_attempt_summary() + own classes/roster/assignments + lesson-meta (titles, marks, curriculum prompts; never answers).
+   Signal rules: assets/pilot-teacher-insights.js (printed in "How these signals work"). ---- */
 let META = null;
+const WS_LEVEL = "P6"; // the pilot is P6-only (assignments are created for P6 lessons)
 async function dashboard(profile){
+  view.profile = profile; view.page = "dash"; view.tab = view.tab || "overview"; view.studentId = null; view.metric = null; view.lessonKey = null; view.assignMsg = "";
+  if (!META) { try { const r = await fetch("assets/pilot-lesson-meta.json"); META = r.ok ? await r.json() : {}; } catch (e) { META = {}; } }
+  await loadAll();
+}
+async function loadAll(){
+  view.msg = "";
   const c = await client.from("classes").select("id,name,join_code,created_at").order("created_at");
   view.classes = c.error ? [] : (c.data || []);
-  if (!view.classId && view.classes.length) view.classId = view.classes[0].id;
-  view.profile = profile; view.page = "dash"; view.studentId = null;
-  if (!META) { try { const r = await fetch("assets/pilot-lesson-meta.json"); META = r.ok ? await r.json() : {}; } catch (e) { META = {}; } }
-  await loadSummary();
-}
-async function loadSummary(){
-  view.rows = []; view.members = []; view.msg = "";
-  if (view.classId) {
-    const r = await client.rpc("teacher_attempt_summary", { p_class_id: view.classId });
-    if (r.error) view.msg = "Could not load progress. Please refresh.";
-    else view.rows = r.data || [];
-    // roster so students who have joined but not practised yet still appear (RLS: class_members + profiles of own class only)
+  view.rows = []; view.members = []; view.assignments = [];
+  if (view.classes.length) {
+    const r = await client.rpc("teacher_attempt_summary", {});
+    if (r.error) view.msg = "Could not load progress. Please refresh."; else view.rows = r.data || [];
     try {
-      const m = await client.from("class_members").select("student_id").eq("class_id", view.classId);
-      const ids = (m.data || []).map(x => x.student_id);
-      if (ids.length) { const p = await client.from("profiles").select("id,display_name").in("id", ids); view.members = (p.data || []).map(x => ({ student_id: x.id, display_name: x.display_name })); }
+      const m = await client.from("class_members").select("student_id,class_id");
+      const ids = Array.from(new Set((m.data || []).map(x => x.student_id)));
+      if (ids.length) {
+        const p = await client.from("profiles").select("id,display_name").in("id", ids);
+        const names = new Map((p.data || []).map(x => [x.id, x.display_name]));
+        view.members = (m.data || []).map(x => ({ student_id: x.student_id, class_id: x.class_id, display_name: names.get(x.student_id) || "Student" }));
+      }
     } catch (e) { view.members = []; }
+    try { const a = await client.from("assignments").select("id,class_id,level,subject_key,lesson_id,due_date,created_at").order("created_at", { ascending: false }); view.assignments = a.error ? [] : (a.data || []); } catch (e) { view.assignments = []; }
   }
-  view.ins = PilotInsights.compute(view.rows, view.members, META || {}, Date.now());
-  renderDashboard();
+  if (view.tab !== "overview" && !view.classes.some(c => c.id === view.tab)) view.tab = "overview";
+  recompute(); renderDashboard();
 }
-function pickClass(id){ view.classId = id; view.page = "dash"; loadSummary(); }
-function openStudent(id){ view.page = "student"; view.studentId = id; renderDashboard(); window.scrollTo(0, 0); }
-function backToDash(){ view.page = "dash"; renderDashboard(); }
+function recompute(){ view.ins = PilotInsights.compute(view.rows, view.members, META || {}, Date.now(), { classId: view.tab, assignments: view.assignments }); }
+function setTab(id){ view.tab = id; view.page = "dash"; recompute(); renderDashboard(); }
+function nav(page, extra){ Object.assign(view, { page: page }, extra || {}); renderDashboard(); window.scrollTo(0, 0); }
+function openStudent(id){ nav("student", { studentId: id }); }
+function openMetric(m){ nav("metric", { metric: m }); }
+function openLesson(k){ nav("lesson", { lessonKey: k }); }
+function backToDash(){ nav("dash"); }
 function fmtDate(ms){ if (ms == null) return "–"; const d = new Date(ms); return isNaN(d) ? "–" : d.toLocaleString("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
+function fmtDue(iso){ if (!iso) return ""; const p = String(iso).split("-"); return p.length === 3 ? p[2] + "/" + p[1] + "/" + p[0] : iso; }
+function greeting(){ const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; }
+function className(id){ const c = view.classes.find(x => x.id === id); return c ? c.name : ""; }
 function chipClass(s){ return s.performance === "Doing well" ? "" : s.performance === "May need attention" ? "warn" : s.performance === "Making progress" ? "blue" : s.performance === "Just getting started" ? "amber" : "grey"; }
 function statusChips(s){ return '<span class="t-chip ' + chipClass(s) + '">' + esc(s.performance) + '</span>' + (s.thinkingHeavy ? ' <span class="t-chip amber">Relies on Thinking Help</span>' : ''); }
 function studentMeta(s){
@@ -321,88 +355,164 @@ function encourageCard(s){
     '<div class="t-encourage-status">' + esc(s.performance) + (s.thinkingHeavy ? ' · Thinking Help' : '') + '</div>' +
     '<div class="t-encourage-focus">' + esc(f ? f.title : studentMeta(s)) + '</div></div>';
 }
+const ASTATUS = { "Not Started": "t-astatus2-new", "In Progress": "t-astatus2-progress", "Needs Practice": "t-astatus2-needs", "Completed": "t-astatus2-done" };
+
+function header(){ return '<div class="row" style="justify-content:space-between"><div class="muted">' + esc(view.profile.display_name) + ' · pilot</div>' + signOutLink() + '</div>'; }
+function backBtn(label){ return '<button class="btn btn-ghost" style="margin-top:20px" onclick="backToDash()">' + (label || "Back to Dashboard") + '</button>'; }
 
 function renderDashboard(){
-  const cls = view.classes.find(c => c.id === view.classId);
-  const picker = view.classes.length > 1
-    ? '<select onchange="pickClass(this.value)">' + view.classes.map(c => '<option value="' + esc(c.id) + '"' + (c.id === view.classId ? " selected" : "") + '>' + esc(c.name) + '</option>').join("") + '</select>' : "";
-  const top = '<div class="row" style="justify-content:space-between"><div class="muted">' + esc(view.profile.display_name) + ' · pilot</div>' + signOutLink() + '</div>';
+  const top = header();
   if (!view.classes.length) return show(top + '<div class="card"><p>No class yet. Ethixo will set up your class and you will see its class code here.</p></div>');
   const d = view.ins;
-  if (view.page === "student") {
-    const s = d.students.find(x => x.id === view.studentId);
-    if (s) return show(top + studentDetail(s, d));
-  }
-  const heroSub = d.joined === 0 ? "Share the class code below to get your students started."
-    : d.active + " of " + d.joined + " student" + (d.joined === 1 ? "" : "s") + " practising so far in " + (cls ? cls.name : "your class") + ".";
-  const progress = [
-    { icon: "leaf", tint: "green", val: d.joined, label: "Students joined" },
-    { icon: "bulb", tint: "blue", val: d.active, label: "Students practising" },
-    { icon: "star", tint: "amber", val: d.totals.full + " / " + d.totals.scored, label: "Full-marks answers (best attempts)" },
-    { icon: "brain", tint: "purple", val: d.totals.thinkingQs + " / " + d.totals.questions, label: "Questions where Thinking Help was used" },
-  ].map(c => '<div class="growth-card tint-' + c.tint + '"><div class="gc-icon">' + dicon(c.icon, 26) + '</div><div class="gc-number">' + esc(c.val) + '</div><div class="gc-label">' + esc(c.label) + '</div></div>').join("");
-  const noticed = d.noticed.length ? d.noticed.map(n => '<div class="noticed-item-refined"><span class="ni-mark">✓</span><span>' + esc(n) + '</span></div>').join("")
-    : '<div class="noticed-item-refined"><span class="ni-mark">✓</span><span>Nothing to show yet. Insights appear as students practise.</span></div>';
-  const attn = d.attention.length ? d.attention.map(encourageCard).join("") : '<p class="qmeta muted">No one flagged right now.</p>';
-  const well = d.doingWell.length ? d.doingWell.map(encourageCard).join("") : '<p class="muted">No one in this group yet.</p>';
-  const all = d.students.map(s => '<div class="t-student-row" onclick="openStudent(\'' + esc(s.id) + '\')"><span class="nm">' + esc(s.name) + '</span>' + statusChips(s) + '<span class="mt" style="flex-basis:100%">' + esc(studentMeta(s)) + '</span></div>').join("");
-  const lessonRows = d.lessons.length ? d.lessons.map(l => '<div class="t-misc-row"><span class="t-misc-title">' + esc(l.title) + '<br><span class="muted">' + esc(l.subject) + '</span></span><span class="t-misc-meta">' +
-      l.students + ' student' + (l.students === 1 ? '' : 's') + (l.avgPct != null ? ' · avg ' + l.avgPct + '%' : '') + (l.struggling ? ' · ' + l.struggling + ' struggling' : '') + '</span></div>').join("")
-    : '<p class="muted">No lessons practised yet.</p>';
-  const er = d.examReady.length ? d.examReady.map(r => '<div class="er-row"><span class="er-name">' + esc(r.label) + '</span><span class="t-er-counts"><span class="t-er-frac"><b>' + r.full + '</b> / ' + r.scored + '</span><span class="t-er-caption">full-marks answers</span></span></div>').join("")
-    : '<p class="muted">No scored answers yet.</p>';
-  const R = d.rules;
-  show(top +
-    '<div class="dash-shell">' +
-    '<div class="teacher-hero-card"><div class="teacher-hero-img-wrap"><img class="teacher-hero-img" src="assets/ethixo_teacher_hero.webp" width="1774" height="887" alt=""><div class="teacher-hero-scrim"></div></div>' +
-      '<div class="teacher-hero-text">' + teacherAvatar(40) + '<div class="teacher-hero-copy"><h1>Hello, ' + esc(view.profile.display_name) + '!</h1><p>' + esc(heroSub) + '</p></div></div></div>' +
-    '<div class="card" style="margin-top:0"><div class="row" style="justify-content:space-between"><div><b>' + esc(cls.name) + '</b> ' + picker + '</div><div>Class code for students: <span class="code">' + esc(cls.join_code) + '</span></div></div></div>' +
-    (view.msg ? '<p class="muted">' + esc(view.msg) + ' <button class="link" onclick="loadSummary()">Retry</button></p>' : '') +
-    '<h3 class="t-section-title">Class progress — ' + esc(cls.name) + '</h3><div class="t-progress-grid">' + progress + '</div>' +
-    '<div class="noticed-card-refined"><div class="noticed-head"><span class="nh-badge">' + dicon("eye", 24) + '</span><h3>Ethixo Noticed</h3></div><div class="noticed-list">' + noticed + '</div></div>' +
-    '<div class="t-encourage-wrap"><h3 class="t-section-title">May need attention</h3><p class="t-encourage-hint">Students scoring under 40% on their best attempts, or relying on Thinking Help for at least half of their questions.</p><div class="t-encourage-grid">' + attn + '</div></div>' +
-    '<div class="t-encourage-wrap"><h3 class="t-section-title">Doing well</h3><p class="t-encourage-hint">Students scoring 70% or more on their best attempts (after at least ' + R.minQuestions + ' questions).</p><div class="t-encourage-grid">' + well + '</div></div>' +
-    '<h3 class="t-section-title">All students</h3>' + (all || '<p class="muted">No students have joined yet.</p>') +
-    '<div class="t-insights-card"><div class="t-head"><span class="t-badge">' + dicon("bulb", 24) + '</span><h3>Lessons students are practising</h3></div><p class="hint">Lessons with a student struggling (under 40% after at least ' + R.lessonMinQuestions + ' questions) are listed first.</p>' + lessonRows + '</div>' +
-    '<div class="examready-card-refined"><div class="er-head"><span class="er-badge">' + dicon("star", 24) + '</span><h3>Full-marks answers</h3></div><p class="hint">Of the answers scored so far, how many reached full marks on the best attempt.</p>' + er + '</div>' +
-    '<details class="t-rules"><summary>How these signals work</summary><ul>' +
-      '<li>Score = a student\'s best attempt on each question ÷ the marks available. Averages use best attempts only.</li>' +
-      '<li>Doing well: ≥ ' + Math.round(R.doingWell * 100) + '% · Making progress: ' + Math.round(R.makingProgress * 100) + '–' + (Math.round(R.doingWell * 100) - 1) + '% · May need attention: &lt; ' + Math.round(R.makingProgress * 100) + '%. Fewer than ' + R.minQuestions + ' questions attempted = Just getting started.</li>' +
-      '<li>Relies on Thinking Help: Thinking Help used on at least ' + Math.round(R.thinkingShare * 100) + '% of ≥ ' + R.minQuestions + ' attempted questions.</li>' +
-      '<li>Struggling in a lesson: ≥ ' + R.lessonMinQuestions + ' questions attempted there with an average under ' + Math.round(R.lessonStruggle * 100) + '%. Active recently: within ' + R.recentDays + ' days.</li>' +
-      '<li>These are simple counts of scores and activity, not a judgement of ability. Ethixo does not see or keep students\' written answers, feedback or Thinking Help conversations.</li></ul></details>' +
-    '<p class="muted" style="margin-top:14px">Read-only. <button class="link" onclick="loadSummary()">Refresh</button></p>' +
-    '</div>');
+  if (view.page === "student") { const s = d.students.find(x => x.id === view.studentId); if (s) return show(top + studentDetail(s)); }
+  if (view.page === "metric" && d.metrics[view.metric]) return show(top + metricDetail(view.metric, d));
+  if (view.page === "lesson") { const l = d.lessons.find(x => x.key === view.lessonKey); if (l) return show(top + lessonDetail(l, d)); }
+  if (view.page === "assign") return show(top + assignScreen());
+  return show(top + mainDashboard(d));
 }
 
-function studentDetail(s, d){
+function mainDashboard(d){
+  const cls = view.tab === "overview" ? null : view.classes.find(c => c.id === view.tab);
+  const label = cls ? cls.name : "All classes";
+  const R = d.rules;
+  const tabs = '<div class="class-tabs"><button class="class-tab' + (view.tab === "overview" ? " active" : "") + '" onclick="setTab(\'overview\')">Overview</button>' +
+    view.classes.map(c => '<button class="class-tab' + (view.tab === c.id ? " active" : "") + '" onclick="setTab(\'' + esc(c.id) + '\')">' + esc(c.name) + '</button>').join("") + '</div>';
+  const heroSub = d.joined === 0 ? "Share the class code below to get your students started."
+    : d.active + " of " + d.joined + " student" + (d.joined === 1 ? "" : "s") + " practising so far" + (cls ? " in " + cls.name : "") + ".";
+  const cards = [
+    { icon: "leaf", tint: "green", val: d.totals.newIdeas, label: "New ideas understood", metric: "newIdeas" },
+    { icon: "bulb", tint: "blue", val: d.totals.corrected, label: "Misconceptions corrected", metric: "misconceptionsCorrected" },
+    { icon: "star", tint: "amber", val: d.totals.full, label: "Exam-ready answers (full marks)", metric: null },
+    { icon: "brain", tint: "purple", val: d.totals.fullNoThinking, label: "Full marks without Thinking Help", metric: "fullNoThinking" },
+  ].map(c => '<div class="growth-card tint-' + c.tint + (c.metric ? ' t-clickable" onclick="openMetric(\'' + c.metric + '\')' : '') + '"><div class="gc-icon">' + dicon(c.icon, 26) + '</div><div class="gc-number">' + esc(c.val) + '</div><div class="gc-label">' + esc(c.label) + '</div>' +
+    (c.metric ? '<div class="t-tap-hint">Tap to see what\'s behind this →</div>' : '') + '</div>').join("");
+  const noticed = d.noticed.length ? d.noticed.map(n => '<div class="noticed-item-refined"><span class="ni-mark">✓</span><span>' + esc(n) + '</span></div>').join("")
+    : '<div class="noticed-item-refined"><span class="ni-mark">✓</span><span>Nothing to show yet. Insights appear as students practise.</span></div>';
+  const attn = d.attention.length ? d.attention.map(encourageCard).join("") : '<p class="muted">No one flagged right now — nice work!</p>';
+  const well = d.doingWell.length ? d.doingWell.map(encourageCard).join("") : '<p class="muted">No one in this group yet.</p>';
+  const all = d.students.map(s => '<div class="t-student-row" onclick="openStudent(\'' + esc(s.id) + '\')"><span class="nm">' + esc(s.name) + '</span>' + statusChips(s) + '<span class="mt" style="flex-basis:100%">' + esc(studentMeta(s)) + '</span></div>').join("");
+  const lessonRows = d.lessons.length ? d.lessons.map(l => '<div class="t-misc-row t-clickable" onclick="openLesson(\'' + esc(l.key) + '\')"><span class="t-misc-title">' + esc(l.title) + '<br><span class="muted">' + esc(l.subject) + '</span></span><span class="t-misc-meta">' +
+      l.students + ' student' + (l.students === 1 ? '' : 's') + (l.avgPct != null ? ' · avg ' + l.avgPct + '%' : '') + (l.struggling ? ' · ' + l.struggling + ' struggling' : '') + ' →</span></div>').join("")
+    : '<p class="muted">No lessons practised yet.</p>';
+  const qRows = d.questionInsights.length ? d.questionInsights.map(q => '<div class="t-misc-row"><span class="t-misc-title">' + esc(q.prompt || ("Question " + (q.qi + 1))) + '<br><span class="muted">' + esc(q.title) + ' · question ' + (q.qi + 1) + '</span></span><span class="t-misc-meta">' +
+      q.underHalf + ' of ' + q.students + ' (' + q.pct + '%) under half marks first time</span></div>').join("")
+    : '<p class="muted">No question has a first attempt under half marks yet.</p>';
+  const erRows = view.tab === "overview" && view.classes.length > 1
+    ? d.examReadyByClass.map(r => erRow(className(r.classId), r.full, r.scored)).join("")
+    : d.examReady.map(r => erRow(r.label, r.full, r.scored)).join("");
+  const assigned = d.assignments.length ? '<h3 class="t-section-title" style="margin-top:0">Assigned Learning</h3><div class="t-areport-wrap">' + d.assignments.map(assignmentReport).join("") + '</div>' : "";
+  return '<div class="dash-shell">' +
+    '<div class="teacher-hero-card"><div class="teacher-hero-img-wrap"><img class="teacher-hero-img" src="assets/ethixo_teacher_hero.webp" width="1774" height="887" alt=""><div class="teacher-hero-scrim"></div></div>' +
+      '<div class="teacher-hero-text">' + teacherAvatar(40) + '<div class="teacher-hero-copy"><h1>' + greeting() + ', ' + esc(view.profile.display_name) + '!</h1><p>' + esc(heroSub) + '</p></div></div></div>' +
+    '<div class="t-workspace-context"><span class="t-workspace-chip">' + dicon("globe", 15) + ' Primary 6 · English, Science &amp; Social Science</span> <button class="t-workspace-chip" style="border:none;cursor:pointer;color:var(--brand-deep);background:var(--brand-light);" onclick="nav(\'assign\', { assignDone: false })">📋 Assign Learning</button></div>' +
+    tabs +
+    '<div class="card" style="margin-top:0"><div class="row" style="justify-content:space-between"><div><b>' + esc(label) + '</b></div><div>' + (cls ? 'Class code for students: <span class="code">' + esc(cls.join_code) + '</span>' : view.classes.map(c => esc(c.name) + ': <span class="code">' + esc(c.join_code) + '</span>').join(' · ')) + '</div></div></div>' +
+    (view.msg ? '<p class="muted">' + esc(view.msg) + ' <button class="link" onclick="loadAll()">Retry</button></p>' : '') +
+    assigned +
+    '<h3 class="t-section-title">This Term\'s Class Progress — ' + esc(label) + '</h3><div class="t-progress-grid">' + cards + '</div>' +
+    '<div class="noticed-card-refined"><div class="noticed-head"><span class="nh-badge">' + dicon("eye", 24) + '</span><h3>Ethixo Noticed</h3></div><div class="noticed-list">' + noticed + '</div></div>' +
+    '<div class="t-encourage-wrap"><h3 class="t-section-title">Students to Encourage</h3><p class="t-encourage-hint">Who may benefit from a little more encouragement right now? Under 40% on best attempts, or relying on Thinking Help for at least half of their questions.</p><div class="t-encourage-grid">' + attn + '</div></div>' +
+    '<div class="t-encourage-wrap"><h3 class="t-section-title">Doing well</h3><p class="t-encourage-hint">Students scoring 70% or more on their best attempts (after at least ' + R.minQuestions + ' questions).</p><div class="t-encourage-grid">' + well + '</div></div>' +
+    '<h3 class="t-section-title">All students</h3>' + (all || '<p class="muted">No students have joined yet. Share the class code.</p>') +
+    '<div class="t-insights-card"><div class="t-head"><span class="t-badge">' + dicon("bulb", 24) + '</span><h3>Teaching Insights</h3></div>' +
+      '<p class="hint">Questions where students most often scored under half marks on their first attempt (curriculum question shown; never a student\'s answer).</p>' + qRows +
+      '<p class="hint" style="margin-top:22px">Lessons students are practising. Lessons with a student struggling are listed first. Tap a lesson for details.</p>' + lessonRows + '</div>' +
+    '<div class="examready-card-refined"><div class="er-head"><span class="er-badge">' + dicon("star", 24) + '</span><h3>Exam Ready Answers</h3></div><p class="hint">Of the answers scored so far, how many reached full marks on the best attempt.</p>' + (erRows || '<p class="muted">No scored answers yet.</p>') + '</div>' +
+    '<details class="t-rules"><summary>How these signals work</summary><ul>' +
+      '<li>Score = a student\'s best attempt on each question ÷ the marks available. Averages use best attempts only.</li>' +
+      '<li>Doing well ≥ ' + Math.round(R.doingWell * 100) + '% · Making progress ' + Math.round(R.makingProgress * 100) + '–' + (Math.round(R.doingWell * 100) - 1) + '% · May need attention &lt; ' + Math.round(R.makingProgress * 100) + '%. Fewer than ' + R.minQuestions + ' questions = Just getting started.</li>' +
+      '<li>Relies on Thinking Help: used on at least ' + Math.round(R.thinkingShare * 100) + '% of ≥ ' + R.minQuestions + ' attempted questions.</li>' +
+      '<li>New ideas understood: lessons in which a student reached full marks on at least one question. Exam-ready answers: best attempt at full marks.</li>' +
+      '<li>Misconceptions corrected: first attempt under half marks and a later attempt at full marks (the same rule students\' own dashboards use).</li>' +
+      '<li>Full marks without Thinking Help: full marks on a question where Thinking Help was never used. This is a proxy signal, not proof that a student explained their reasoning independently.</li>' +
+      '<li>Ethixo Noticed behaviours (keeps trying, first-try full marks, works through thinking) need evidence from at least ' + R.behaviourMin + ' different questions.</li>' +
+      '<li>Struggling in a lesson: ≥ ' + R.lessonMinQuestions + ' questions attempted there, average under ' + Math.round(R.lessonStruggle * 100) + '%. Assignment status: Not Started (nothing attempted) · Completed (every question at full marks) · Needs Practice (≥ ' + R.assignNeedsPracticeMin + ' attempted, average under ' + Math.round(R.assignNeedsPractice * 100) + '%) · otherwise In Progress.</li>' +
+      '<li>Not available: concept-level misconception names, Thinking Cycle quality and anything written by students. Ethixo does not see or keep students\' written answers, feedback or Thinking Help conversations. These are simple counts of scores and activity, not a judgement of ability.</li></ul></details>' +
+    '<p class="muted" style="margin-top:14px">Read-only except for assignments. <button class="link" onclick="loadAll()">Refresh</button></p>' +
+    '</div>';
+}
+function erRow(label, full, scored){ return '<div class="er-row"><span class="er-name">' + esc(label) + '</span><span class="t-er-counts"><span class="t-er-frac"><b>' + full + '</b> / ' + scored + '</span><span class="t-er-caption">exam-ready answers</span></span></div>'; }
+function assignmentReport(a){
+  const rows = a.rows.length ? a.rows.map(r => '<div class="t-areport-row"><span class="t-areport-name">' + esc(r.name) + '</span><span class="t-areport-status-frac"><span class="t-astatus2 ' + ASTATUS[r.status] + '">' + r.status + '</span>' +
+    (r.status !== "Not Started" ? '<span class="t-areport-frac">' + r.done + '/' + r.total + '</span>' : '') + '</span></div>').join("") : '<p class="muted">No students in this class yet.</p>';
+  return '<div class="t-areport"><div class="t-areport-class">' + esc(className(a.classId)) + '</div><div class="t-areport-lesson">' + esc(a.subject) + ' · ' + esc(a.lessonTitle) + '</div>' +
+    '<div class="t-areport-due">Due date: ' + esc(fmtDue(a.dueDate)) + '</div><div class="t-areport-rows">' + rows + '</div></div>';
+}
+
+function metricDetail(m, d){
+  const info = d.metrics[m];
+  const items = info.items.length ? info.items.map(it => '<div class="detail-item"><b>' + esc(it.title) + '</b><span>' + esc(it.note) + '</span></div>').join("") : '<p class="muted">Nothing to show yet.</p>';
+  return '<div class="dash-shell"><div class="card"><h1>' + esc(info.label) + ' — ' + esc(view.tab === "overview" ? "All classes" : className(view.tab)) + '</h1><div class="t-insight-banner">' + esc(info.insight) + '</div>' + items + backBtn() + '</div></div>';
+}
+function lessonDetail(l, d){
+  const studs = d.students.map(s => ({ s: s, l: s.lessons.find(x => x.key === l.key) })).filter(x => x.l).sort((a, b) => (a.l.avgRatio == null) - (b.l.avgRatio == null) || (a.l.avgRatio || 0) - (b.l.avgRatio || 0));
+  const rows = studs.map(x => '<div class="t-student-row" onclick="openStudent(\'' + esc(x.s.id) + '\')"><span class="nm">' + esc(x.s.name) + '</span>' + (x.l.struggling ? '<span class="t-chip warn">Struggling</span>' : x.l.hasFull ? '<span class="t-chip">Full marks reached</span>' : '<span class="t-chip blue">Practising</span>') +
+    '<span class="mt" style="flex-basis:100%">' + x.l.questions + ' question' + (x.l.questions === 1 ? '' : 's') + (x.l.avgRatio != null ? ' · avg ' + Math.round(x.l.avgRatio * 100) + '%' : '') + ' · Thinking Help ' + x.l.thinkingQs + '/' + x.l.questions + '</span></div>').join("");
+  const meta = META && META[l.level] && META[l.level][l.subjectKey] && META[l.level][l.subjectKey].lessons[l.lessonId];
+  const qs = meta ? meta.marks.map((m, i) => {
+    let n = 0, full = 0, under = 0; d.students.forEach(s => s.qs.forEach(q => { if (q.level === l.level && q.sk === l.subjectKey && q.lesson === l.lessonId && q.qi === i) { n++; if (q.full) full++; if (q.underHalfFirst) under++; } }));
+    return '<div class="t-misc-row"><span class="t-misc-title">' + esc(meta.prompts[i]) + '<br><span class="muted">Question ' + (i + 1) + ' · ' + m + ' mark' + (m === 1 ? '' : 's') + '</span></span><span class="t-misc-meta">' + (n ? n + ' tried · ' + full + ' full marks · ' + under + ' under half first time' : 'not tried yet') + '</span></div>';
+  }).join("") : "";
+  return '<div class="dash-shell"><div class="card"><h1>' + esc(l.title) + '</h1><p class="muted">' + esc(l.subject) + ' · ' + l.students + ' student' + (l.students === 1 ? '' : 's') + (l.avgPct != null ? ' · average ' + l.avgPct + '%' : '') + '</p>' +
+    '<h3 class="t-section-title" style="margin-top:20px">Students</h3>' + rows +
+    '<div class="t-insights-card" style="margin-top:22px"><div class="t-head"><span class="t-badge">' + dicon("bulb", 24) + '</span><h3>Questions in this lesson</h3></div><p class="hint">Curriculum questions only. Scores and counts, never student answers.</p>' + qs + '</div>' + backBtn() + '</div></div>';
+}
+function studentDetail(s){
+  const f = s.focusLesson;
   const rows = [
-    ["Status", statusChips(s)],
-    ["Questions attempted", s.questions], ["Attempts in total", s.attempts], ["Lessons practised", s.lessonsPractised],
-    ["Average score (best attempts)", s.avgPct == null ? "–" : s.avgPct + "%"],
-    ["Full-marks answers", s.scored ? s.fullMarks + " of " + s.scored : "–"],
-    ["Thinking Help used on", s.questions ? s.thinkingQs + " of " + s.questions + " questions" : "–"],
-    ["Retried questions", s.retried + (s.retriedFull ? " (" + s.retriedFull + " reached full marks)" : "")],
-    ["Last active", fmtDate(s.lastAt)],
-  ].map(r => '<div class="t-detail-row"><span class="t-detail-label">' + r[0] + '</span><span class="t-detail-val">' + (typeof r[1] === "string" && r[1].indexOf("<span") === 0 ? r[1] : esc(r[1])) + '</span></div>').join("");
-  const notes = [];
+    ["Current focus", esc(f ? f.title : (s.lessons[0] ? s.lessons[0].title : "–"))], ["Recent progress", esc(s.progress)], ["Status", statusChips(s)],
+    ["Questions attempted", esc(s.questions)], ["Attempts in total", esc(s.attempts)], ["Lessons practised", esc(s.lessonsPractised)], ["New ideas understood (lessons)", esc(s.newIdeas)],
+    ["Average score (best attempts)", esc(s.avgPct == null ? "–" : s.avgPct + "%")], ["Exam-ready answers (full marks)", esc(s.scored ? s.fullMarks + " of " + s.scored : "–")],
+    ["Misconceptions corrected", esc(s.corrected)], ["Full marks without Thinking Help", esc(s.fullNoThinking)],
+    ["Thinking Help used on", esc(s.questions ? s.thinkingQs + " of " + s.questions + " questions" : "–")],
+    ["Retried questions", esc(s.retried + (s.retriedFull ? " (" + s.retriedFull + " reached full marks)" : ""))], ["Last active", esc(fmtDate(s.lastAt))],
+  ].map(r => '<div class="t-detail-row"><span class="t-detail-label">' + r[0] + '</span><span class="t-detail-val">' + r[1] + '</span></div>').join("");
+  const notes = []; const R = view.ins.rules;
   if (!s.questions) notes.push("Joined the class but has not practised yet.");
   else {
     if (s.doingWell) notes.push("Scoring well: " + s.avgPct + "% of the marks on best attempts.");
     if (s.needsAttention) notes.push("Scoring " + s.avgPct + "% of the marks on best attempts, which may need attention.");
     if (s.performance === "Just getting started") notes.push("Only " + s.questions + " question" + (s.questions === 1 ? "" : "s") + " attempted so far; not enough to read a pattern yet.");
+    if (s.improved >= R.behaviourMin) notes.push("Keeps trying after a tricky first attempt: improved after retrying on " + s.improved + " questions.");
+    else if (s.progress === "Improving") notes.push("Improving: scored higher after retrying on " + s.improved + " questions.");
+    if (s.firstTry >= R.behaviourMin) notes.push("Reaching full marks on the first try on " + s.firstTry + " questions.");
     if (s.thinkingHeavy) notes.push("Used Thinking Help on " + s.thinkingQs + " of " + s.questions + " questions.");
-    if (s.retriedFull) notes.push("Reached full marks after retrying on " + s.retriedFull + " question" + (s.retriedFull === 1 ? "" : "s") + ".");
-    if (s.focusLesson && s.focusLesson.struggling) notes.push("Struggling in: " + s.focusLesson.title + ".");
+    if (s.corrected) notes.push(s.corrected + " answer" + (s.corrected === 1 ? "" : "s") + " went from under half marks to full marks.");
+    if (f && f.struggling) notes.push("Struggling in: " + f.title + ".");
   }
   const noticed = (notes.length ? notes : ["Nothing to show yet."]).map(n => '<div class="noticed-item-refined"><span class="ni-mark">✓</span><span>' + esc(n) + '</span></div>').join("");
   const lessons = s.lessons.length ? s.lessons.map(l => '<div class="t-misc-row"><span class="t-misc-title">' + esc(l.title) + '<br><span class="muted">' + esc(l.subject) + '</span></span><span class="t-misc-meta">' +
-      l.questions + ' q' + (l.avgRatio != null ? ' · ' + Math.round(l.avgRatio * 100) + '%' : '') + (l.thinkingQs ? ' · Thinking Help ' + l.thinkingQs : '') + (l.struggling ? ' · struggling' : '') + '</span></div>').join("")
-    : '<p class="muted">No lessons practised yet.</p>';
+      l.questions + ' q' + (l.avgRatio != null ? ' · ' + Math.round(l.avgRatio * 100) + '%' : '') + (l.thinkingQs ? ' · Thinking Help ' + l.thinkingQs : '') + (l.struggling ? ' · struggling' : '') + '</span></div>').join("") : '<p class="muted">No lessons practised yet.</p>';
   return '<div class="dash-shell"><div class="card"><h1>' + esc(s.name) + '</h1>' + rows +
     '<div class="noticed-card-refined" style="margin-top:22px"><div class="noticed-head"><span class="nh-badge">' + dicon("eye", 24) + '</span><h3>Ethixo Noticed</h3></div><div class="noticed-list">' + noticed + '</div></div>' +
-    '<div class="t-insights-card" style="margin-top:22px"><div class="t-head"><span class="t-badge">' + dicon("bulb", 24) + '</span><h3>Lessons practised</h3></div><p class="hint">Scores and activity only. No answers, feedback or Thinking Help conversations are shown.</p>' + lessons + '</div>' +
-    '<button class="ghost" style="margin-top:22px" onclick="backToDash()">Back to dashboard</button></div></div>';
+    '<div class="t-insights-card" style="margin-top:22px"><div class="t-head"><span class="t-badge">' + dicon("bulb", 24) + '</span><h3>Lessons practised</h3></div><p class="hint">Scores and activity only. No answers, feedback or Thinking Help conversations are shown.</p>' + lessons + '</div>' + backBtn() + '</div></div>';
+}
+
+/* ---- Assign Learning (same form and confirmation as the Sharon demo). Writes ONE row to public.assignments (RLS: approved teacher, own class). ---- */
+function assignScreen(){
+  if (view.assignDone) return '<div class="dash-shell"><div class="card center"><h1 class="title">✅ Assignment assigned successfully.</h1><p class="muted">' + esc(className(view.assignClass)) + ' will see this in their Assigned Learning.</p>' +
+    '<div class="row" style="justify-content:center;margin-top:20px"><button class="btn btn-ghost" onclick="nav(\'assign\', { assignDone: false })">Assign Another</button><button class="btn btn-primary" onclick="backToDash()">Go to Teacher Dashboard</button></div></div></div>';
+  const subj = view.assignSubject || "EN"; const lvl = META && META[WS_LEVEL] || {};
+  const lessons = lvl[subj] ? Object.keys(lvl[subj].lessons).filter(id => !lvl[subj].lessons[id].locked).map(id => ({ id: id, title: lvl[subj].lessons[id].title })) : [];
+  const cls = view.classes.map(c => '<option value="' + esc(c.id) + '"' + (c.id === (view.assignClass || (view.tab !== "overview" ? view.tab : view.classes[0].id)) ? " selected" : "") + '>' + esc(c.name) + '</option>').join("");
+  const subs = Object.keys(lvl).map(k => '<option value="' + esc(k) + '"' + (k === subj ? " selected" : "") + '>' + esc(lvl[k].name) + '</option>').join("");
+  return '<div class="dash-shell"><div class="card"><h1 class="title">📋 Assign Learning</h1><p class="muted">Give your class a specific lesson to practise, with a due date.</p>' +
+    '<label class="field">Class</label><select class="assign-input" id="assignClass">' + cls + '</select>' +
+    '<label class="field">Subject</label><select class="assign-input" id="assignSubject" onchange="view.assignSubject=this.value;view.assignClass=document.getElementById(\'assignClass\').value;renderDashboard()">' + subs + '</select>' +
+    '<label class="field">Lesson</label><select class="assign-input" id="assignLesson">' + lessons.map(l => '<option value="' + esc(l.id) + '">' + esc(l.title) + '</option>').join("") + '</select>' +
+    '<label class="field">Due date</label><input class="assign-input" type="date" id="assignDueDate">' +
+    (view.assignMsg ? '<p class="muted" style="margin-top:10px">' + esc(view.assignMsg) + '</p>' : '') +
+    '<button class="btn btn-primary" style="margin-top:16px" onclick="assignLearning()">Assign Learning</button>' +
+    '<button class="btn btn-ghost" style="margin-top:12px" onclick="backToDash()">Back to Dashboard</button></div></div>';
+}
+async function assignLearning(){
+  const classId = document.getElementById("assignClass").value, subject = document.getElementById("assignSubject").value, lesson = document.getElementById("assignLesson").value, due = document.getElementById("assignDueDate").value;
+  view.assignClass = classId; view.assignSubject = subject;
+  if (!lesson) { view.assignMsg = "Choose a lesson first"; return renderDashboard(); }
+  if (!due) { view.assignMsg = "Choose a due date first"; return renderDashboard(); }
+  const r = await client.from("assignments").insert({ class_id: classId, level: WS_LEVEL, subject_key: subject, lesson_id: lesson, due_date: due });
+  if (r.error) { view.assignMsg = "Could not assign right now. Please try again."; return renderDashboard(); }
+  view.assignMsg = ""; view.assignDone = true; await loadAll(); view.page = "assign"; renderDashboard();
 }
 
 boot();
