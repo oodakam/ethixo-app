@@ -172,6 +172,10 @@
   .t-misc-title{min-width:0;overflow-wrap:anywhere;}
   @media(max-width:560px){.t-misc-row{flex-direction:column;align-items:flex-start;gap:6px;}.t-misc-meta{margin-left:0;text-align:left;}}
   .t-misc-row.t-clickable{cursor:pointer;} .t-misc-row.t-clickable:hover{background:rgba(255,255,255,.6);}
+  .t-scope{display:flex;flex-direction:column;gap:8px;margin:2px 0 10px;font-size:14.5px;} .t-scope label{display:flex;align-items:center;gap:8px;cursor:pointer;}
+  .t-qpick{border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:#fff;}
+  .t-qpick-row{display:flex;align-items:flex-start;gap:10px;padding:8px 2px;border-bottom:1px solid var(--border);cursor:pointer;font-size:14px;} .t-qpick-row:last-of-type{border-bottom:none;}
+  .t-qpick-row input{margin-top:4px;flex:none;width:18px;height:18px;} .t-qpick-num{font-weight:800;color:var(--brand-deep);flex:none;min-width:28px;} .t-qpick-text{min-width:0;overflow-wrap:anywhere;}
   .t-chip{display:inline-block;font-size:12px;font-weight:700;border-radius:20px;padding:3px 10px;background:var(--brand-light);color:var(--brand-deep);}
   .t-chip.warn{background:#FCE8E4;color:#9c3a28;} .t-chip.amber{background:var(--amber-bg);color:#8a5c14;} .t-chip.grey{background:#ECEEED;color:var(--muted);}
   .t-chip.blue{background:#E3EEFB;color:#1D5A9E;}
@@ -326,7 +330,7 @@ async function loadAll(){
         view.members = (m.data || []).map(x => ({ student_id: x.student_id, class_id: x.class_id, display_name: names.get(x.student_id) || "Student" }));
       }
     } catch (e) { view.members = []; }
-    try { const a = await client.from("assignments").select("id,class_id,level,subject_key,lesson_id,due_date,created_at").order("created_at", { ascending: false }); view.assignments = a.error ? [] : (a.data || []); } catch (e) { view.assignments = []; }
+    try { let a = await client.from("assignments").select("id,class_id,level,subject_key,lesson_id,due_date,created_at,question_indexes").order("created_at", { ascending: false }); if (a.error) a = await client.from("assignments").select("id,class_id,level,subject_key,lesson_id,due_date,created_at").order("created_at", { ascending: false }); view.assignments = a.error ? [] : (a.data || []); } catch (e) { view.assignments = []; }
   }
   if (view.tab !== "overview" && !view.classes.some(c => c.id === view.tab)) view.tab = "overview";
   recompute(); renderDashboard();
@@ -436,7 +440,7 @@ function assignmentReport(a){
   const rows = a.rows.length ? a.rows.map(r => '<div class="t-areport-row"><span class="t-areport-name">' + esc(r.name) + '</span><span class="t-areport-status-frac"><span class="t-astatus2 ' + ASTATUS[r.status] + '">' + r.status + '</span>' +
     (r.status !== "Not Started" ? '<span class="t-areport-frac">' + r.done + '/' + r.total + '</span>' : '') + '</span></div>').join("") : '<p class="muted">No students in this class yet.</p>';
   return '<div class="t-areport"><div class="t-areport-class">' + esc(className(a.classId)) + '</div><div class="t-areport-lesson">' + esc(a.subject) + ' · ' + esc(a.lessonTitle) + '</div>' +
-    '<div class="t-areport-due">Due date: ' + esc(fmtDue(a.dueDate)) + '</div><div class="t-areport-rows">' + rows + '</div></div>';
+    (a.questionIndexes ? '<div class="t-areport-due">' + esc(qLabel(a.questionIndexes)) + '</div>' : '') + '<div class="t-areport-due">Due date: ' + esc(fmtDue(a.dueDate)) + '</div><div class="t-areport-rows">' + rows + '</div></div>';
 }
 
 function metricDetail(m, d){
@@ -488,31 +492,80 @@ function studentDetail(s){
     '<div class="t-insights-card" style="margin-top:22px"><div class="t-head"><span class="t-badge">' + dicon("bulb", 24) + '</span><h3>Lessons practised</h3></div><p class="hint">Scores and activity only. No answers, feedback or Thinking Help conversations are shown.</p>' + lessons + '</div>' + backBtn() + '</div></div>';
 }
 
-/* ---- Assign Learning (same form and confirmation as the Sharon demo). Writes ONE row to public.assignments (RLS: approved teacher, own class). ---- */
+/* ---- Assign Learning (Sharon form + question picker). Writes ONE row to public.assignments (RLS: approved teacher, own class).
+   Whole lesson => the old payload (no question_indexes => NULL). Specific questions => question_indexes = zero-based curriculum indexes only. ---- */
+function qLabel(idx){ return (idx.length === 1 ? "Question " : "Questions ") + idx.map(i => i + 1).join(", "); }
+function assignLessons(subj){ const lvl = META && META[WS_LEVEL] || {}; return lvl[subj] ? Object.keys(lvl[subj].lessons).filter(id => !lvl[subj].lessons[id].locked).map(id => ({ id: id, title: lvl[subj].lessons[id].title })) : []; }
+function assignMeta(subj, lessonId){ const lvl = META && META[WS_LEVEL] || {}; return lvl[subj] && lvl[subj].lessons[lessonId] || null; }
+function captureAssignForm(){
+  const g = id => document.getElementById(id);
+  if (g("assignClass")) view.assignClass = g("assignClass").value;
+  if (g("assignSubject")) view.assignSubject = g("assignSubject").value;
+  if (g("assignLesson")) view.assignLesson = g("assignLesson").value;
+  if (g("assignDueDate")) view.assignDue = g("assignDueDate").value;
+}
+function assignChange(what, val){
+  captureAssignForm();
+  if (what === "subject") { view.assignLesson = null; view.assignQs = []; }
+  if (what === "lesson") { view.assignQs = []; }
+  if (what === "scope") { view.assignScope = val; }
+  renderDashboard();
+}
+function toggleAssignQ(i, on){
+  const set = new Set(view.assignQs || []); if (on) set.add(i); else set.delete(i);
+  view.assignQs = Array.from(set).sort((a, b) => a - b);
+  const c = document.getElementById("assignQCount"); if (c) c.textContent = view.assignQs.length ? view.assignQs.length + " selected" : "None selected yet";
+}
 function assignScreen(){
   if (view.assignDone) return '<div class="dash-shell"><div class="card center"><h1 class="title">✅ Assignment assigned successfully.</h1><p class="muted">' + esc(className(view.assignClass)) + ' will see this in their Assigned Learning.</p>' +
-    '<div class="row" style="justify-content:center;margin-top:20px"><button class="btn btn-ghost" onclick="nav(\'assign\', { assignDone: false })">Assign Another</button><button class="btn btn-primary" onclick="backToDash()">Go to Teacher Dashboard</button></div></div></div>';
+    (view.assignSummary ? '<p class="muted"><b>' + esc(view.assignSummary) + '</b></p>' : '') +
+    '<div class="row" style="justify-content:center;margin-top:20px"><button class="btn btn-ghost" onclick="nav(\'assign\', { assignDone: false, assignScope: \'lesson\', assignQs: [], assignDue: \'\', assignSummary: \'\' })">Assign Another</button><button class="btn btn-primary" onclick="backToDash()">Go to Teacher Dashboard</button></div></div></div>';
   const subj = view.assignSubject || "EN"; const lvl = META && META[WS_LEVEL] || {};
-  const lessons = lvl[subj] ? Object.keys(lvl[subj].lessons).filter(id => !lvl[subj].lessons[id].locked).map(id => ({ id: id, title: lvl[subj].lessons[id].title })) : [];
+  const lessons = assignLessons(subj);
+  const lessonId = lessons.some(l => l.id === view.assignLesson) ? view.assignLesson : (lessons[0] && lessons[0].id);
+  const m = lessonId ? assignMeta(subj, lessonId) : null;
+  const scope = view.assignScope === "questions" ? "questions" : "lesson"; const sel = new Set(view.assignQs || []);
   const cls = view.classes.map(c => '<option value="' + esc(c.id) + '"' + (c.id === (view.assignClass || (view.tab !== "overview" ? view.tab : view.classes[0].id)) ? " selected" : "") + '>' + esc(c.name) + '</option>').join("");
   const subs = Object.keys(lvl).map(k => '<option value="' + esc(k) + '"' + (k === subj ? " selected" : "") + '>' + esc(lvl[k].name) + '</option>').join("");
-  return '<div class="dash-shell"><div class="card"><h1 class="title">📋 Assign Learning</h1><p class="muted">Give your class a specific lesson to practise, with a due date.</p>' +
+  const picker = (scope === "questions" && m) ? '<div class="t-qpick" id="assignQList">' + m.marks.map((mk, i) =>
+    '<label class="t-qpick-row"><input type="checkbox" value="' + i + '"' + (sel.has(i) ? " checked" : "") + ' onchange="toggleAssignQ(' + i + ', this.checked)"><span class="t-qpick-num">Q' + (i + 1) + '</span><span class="t-qpick-text">' + esc(m.prompts[i]) + '<span class="muted"> · ' + mk + ' mark' + (mk === 1 ? '' : 's') + '</span></span></label>').join("") +
+    '<p class="muted" id="assignQCount" style="margin:8px 2px 0">' + (sel.size ? sel.size + ' selected' : 'None selected yet') + '</p></div>' : '';
+  return '<div class="dash-shell"><div class="card"><h1 class="title">📋 Assign Learning</h1><p class="muted">Give your class a specific lesson, or just the questions you choose, to practise, with a due date.</p>' +
     '<label class="field">Class</label><select class="assign-input" id="assignClass">' + cls + '</select>' +
-    '<label class="field">Subject</label><select class="assign-input" id="assignSubject" onchange="view.assignSubject=this.value;view.assignClass=document.getElementById(\'assignClass\').value;renderDashboard()">' + subs + '</select>' +
-    '<label class="field">Lesson</label><select class="assign-input" id="assignLesson">' + lessons.map(l => '<option value="' + esc(l.id) + '">' + esc(l.title) + '</option>').join("") + '</select>' +
-    '<label class="field">Due date</label><input class="assign-input" type="date" id="assignDueDate">' +
+    '<label class="field">Subject</label><select class="assign-input" id="assignSubject" onchange="assignChange(\'subject\')">' + subs + '</select>' +
+    '<label class="field">Lesson</label><select class="assign-input" id="assignLesson" onchange="assignChange(\'lesson\')">' + lessons.map(l => '<option value="' + esc(l.id) + '"' + (l.id === lessonId ? " selected" : "") + '>' + esc(l.title) + '</option>').join("") + '</select>' +
+    '<label class="field">What should they practise?</label>' +
+    '<div class="t-scope"><label><input type="radio" name="assignScope" value="lesson"' + (scope === "lesson" ? " checked" : "") + ' onchange="assignChange(\'scope\', \'lesson\')"> Whole lesson' + (m ? ' (' + m.marks.length + ' questions)' : '') + '</label>' +
+    '<label><input type="radio" name="assignScope" value="questions"' + (scope === "questions" ? " checked" : "") + ' onchange="assignChange(\'scope\', \'questions\')"> Choose specific questions</label></div>' + picker +
+    '<label class="field">Due date</label><input class="assign-input" type="date" id="assignDueDate" value="' + esc(view.assignDue || "") + '">' +
     (view.assignMsg ? '<p class="muted" style="margin-top:10px">' + esc(view.assignMsg) + '</p>' : '') +
     '<button class="btn btn-primary" style="margin-top:16px" onclick="assignLearning()">Assign Learning</button>' +
     '<button class="btn btn-ghost" style="margin-top:12px" onclick="backToDash()">Back to Dashboard</button></div></div>';
 }
 async function assignLearning(){
-  const classId = document.getElementById("assignClass").value, subject = document.getElementById("assignSubject").value, lesson = document.getElementById("assignLesson").value, due = document.getElementById("assignDueDate").value;
-  view.assignClass = classId; view.assignSubject = subject;
+  if (view.assigning) return; // the table is append-only: never let a double-click create two rows
+  captureAssignForm();
+  const classId = view.assignClass, subject = view.assignSubject || "EN", due = view.assignDue;
+  const lessons = assignLessons(subject); const lesson = lessons.some(l => l.id === view.assignLesson) ? view.assignLesson : (lessons[0] && lessons[0].id);
   if (!lesson) { view.assignMsg = "Choose a lesson first"; return renderDashboard(); }
+  const m = assignMeta(subject, lesson);
+  let qs = null;
+  if (view.assignScope === "questions") {
+    qs = (view.assignQs || []).filter(i => m && i >= 0 && i < m.marks.length).sort((a, b) => a - b);
+    if (!qs.length) { view.assignMsg = "Choose at least one question"; return renderDashboard(); }
+  }
   if (!due) { view.assignMsg = "Choose a due date first"; return renderDashboard(); }
-  const r = await client.from("assignments").insert({ class_id: classId, level: WS_LEVEL, subject_key: subject, lesson_id: lesson, due_date: due });
-  if (r.error) { view.assignMsg = "Could not assign right now. Please try again."; return renderDashboard(); }
-  view.assignMsg = ""; view.assignDone = true; await loadAll(); view.page = "assign"; renderDashboard();
+  const row = { class_id: classId, level: WS_LEVEL, subject_key: subject, lesson_id: lesson, due_date: due };
+  if (qs) row.question_indexes = qs;   // curriculum identifiers only; whole lesson keeps the original payload (column omitted => NULL)
+  view.assigning = true;
+  try {
+    const r = await client.from("assignments").insert(row);
+    if (r.error) { view.assignMsg = "Could not assign right now. Please try again."; return renderDashboard(); }
+  } finally { view.assigning = false; }
+  view.assignMsg = ""; view.assignDone = true;
+  view.assignSummary = (m ? m.title : lesson) + " · " + (qs ? qLabel(qs) : "Whole lesson");
+  view.assignScope = "lesson"; view.assignQs = []; view.assignLesson = null;
+  await loadAll(); view.page = "assign"; renderDashboard();
 }
 
 boot();

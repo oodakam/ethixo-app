@@ -2,7 +2,7 @@
    INPUT is ONLY what the privacy boundary already gives the teacher:
      rows        = teacher_attempt_summary() rows: per student x question -> attempt_count, first_score, latest_score, best_score, latest_at, used_thinking
      members     = joined students ({student_id, display_name, class_id})  — so students with no attempts still appear
-     assignments = the teacher's own assignments rows (class_id, level, subject_key, lesson_id, due_date)
+     assignments = the teacher's own assignments rows (class_id, level, subject_key, lesson_id, due_date, question_indexes[NULL = whole lesson])
      meta        = assets/pilot-lesson-meta.json: lesson titles, max marks per question and the curriculum question PROMPT. No answer keys.
    Nothing here can see written answers, feedback, Thinking Cycle text, ScholarVault or student_state.
 
@@ -186,15 +186,21 @@
 
     // ---- Assigned Learning roster
     var assignments = (allAssign(opts.assignments, classId)).map(function (a) {
-      var l = lessonOf(meta, a.level, a.subject_key, a.lesson_id); var total = l && l.marks ? l.marks.length : 0;
+      var l = lessonOf(meta, a.level, a.subject_key, a.lesson_id); var lessonTotal = l && l.marks ? l.marks.length : 0;
+      // Question-level assignment (B2): question_indexes = zero-based curriculum indexes, NULL = whole lesson. Only valid, distinct indexes count.
+      var qSel = null;
+      if (Array.isArray(a.question_indexes)) {
+        qSel = a.question_indexes.filter(function (n, i, arr) { return typeof n === "number" && n >= 0 && n % 1 === 0 && n < lessonTotal && arr.indexOf(n) === i; }).sort(function (x, y) { return x - y; });
+      }
+      var total = qSel ? qSel.length : lessonTotal;
       var cls = students.filter(function (s) { return (allMembers || []).some(function (m) { return m.student_id === s.id && m.class_id === a.class_id; }); });
       var rowsFor = cls.map(function (s) {
-        var qs = s.qs.filter(function (q) { return q.level === a.level && q.sk === a.subject_key && q.lesson === a.lesson_id; });
+        var qs = s.qs.filter(function (q) { return q.level === a.level && q.sk === a.subject_key && q.lesson === a.lesson_id && (!qSel || qSel.indexOf(q.qi) !== -1); });
         var attempted = qs.filter(function (q) { return q.cnt > 0; }).length, full = qs.filter(function (q) { return q.full; }).length;
         var ratios = qs.filter(function (q) { return q.ratio != null; }).map(function (q) { return q.ratio; });
         return { studentId: s.id, name: s.name, status: assignmentStatus(attempted, full, total, ratios), done: full, total: total, attempted: attempted };
       }).sort(function (x, y) { return x.name.localeCompare(y.name); });
-      return { id: a.id, classId: a.class_id, level: a.level, subjectKey: a.subject_key, lessonId: a.lesson_id, lessonTitle: lessonTitle(meta, a.level, a.subject_key, a.lesson_id), subject: subjectName(meta, a.level, a.subject_key), dueDate: a.due_date, rows: rowsFor };
+      return { id: a.id, classId: a.class_id, level: a.level, subjectKey: a.subject_key, lessonId: a.lesson_id, questionIndexes: qSel, lessonTitle: lessonTitle(meta, a.level, a.subject_key, a.lesson_id), subject: subjectName(meta, a.level, a.subject_key), dueDate: a.due_date, rows: rowsFor };
     });
     function allAssign(list, cid) { return (list || []).filter(function (a) { return !cid || a.class_id === cid; }); }
 
